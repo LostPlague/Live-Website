@@ -1,0 +1,100 @@
+.os-window {
+  background-color: #c3c6ca;
+  font-family: 'MS Sans Serif', Tahoma, sans-serif;
+}
+
+.os-window-border-outer {
+  border: 1px solid #000000;
+  border-top-color: #c3c6ca;
+  border-left-color: #c3c6ca;
+}
+
+.os-window-border-inner {
+  border: 1px solid #86898d;
+  border-top-color: #FFFFFF;
+  border-left-color: #FFFFFF;
+  padding: 2px;
+}
+
+/* Title bar — Henry's exact: blue gradient, 20px tall */
+.os-window-titlebar {
+  background: linear-gradient(to right, #0000a3, #1084d0);
+  width: 100%;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 2px;
+  box-sizing: border-box;
+}
+
+.os-window-titlebar-text {
+  display: flex;
+  align-items: center;
+  padding-left: 4px;
+  color: white;
+  font-weight: bold;
+  font-size: 11px;
+}
+
+.os-window-titlebar-icon {
+  margin-right: 4px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.os-window-titlebar-buttons {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.os-window-btn {
+  width: 16px;
+  height: 14px;
+  background: #c3c6ca;
+  border: 1px solid #FFFFFF;
+  border-bottom-color: #000000;
+  border-right-color: #000000;
+  font-family: 'MS Sans Serif', Tahoma, sans-serif;
+  font-size: 10px;
+  font-weight: bold;
+  color: #000000;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.os-window-btn:active {
+  border: 1px solid #000000;
+  border-bottom-color: #FFFFFF;
+  border-right-color: #FFFFFF;
+}
+
+.os-window-btn-close {
+  font-size: 12px;
+}
+
+.os-window-content {
+  border: 1px solid #FFFFFF;
+  border-top-color: #86898d;
+  border-left-color: #86898d;
+  margin-top: 2px;
+  background: white;
+  padding: 2px;
+}
+
+.os-window-content[data-maximized="true"] {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.os-window-content[data-maximized="true"] > * {
+  transform: scale(2.5);
+  transform-origin: center center;
+  image-rendering: pixelated;  /* keep pixel-art crisp when scaling */
+}

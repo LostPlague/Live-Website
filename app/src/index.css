@@ -1,0 +1,213 @@
+/* Henry's reset + typography (ported verbatim from his main.css) */
+* {
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  overflow: hidden;
+}
+
+h1, h2, h3, h4, h5, p {
+  font-family: monospace;
+  font-weight: 400;
+  color: white;
+  font-size: 16px;
+}
+
+@media only screen and (max-width: 768px) {
+  h1, h2, h3, h4, h5, p {
+    font-size: 10px;
+  }
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #0c0c0e;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #e5e7eb;
+}
+
+#experience-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+#webgl {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;          /* ← WebGL back in front of CSS3D */
+  pointer-events: none;
+}
+
+#webgl.interactive {
+  pointer-events: auto;
+}
+
+#css {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;           /* ← CSS3D goes behind WebGL */
+  pointer-events: none; /* ← events pass through CSS3D container */
+}
+
+/* ADD THIS new rule — iframe can receive mouse events directly */
+#computer-screen {
+  pointer-events: auto;
+}
+
+/* Jitter/noise overlay to simulate vintage CRT */
+.jitter {
+  animation: crt-jitter 0.15s infinite;
+}
+
+@keyframes crt-jitter {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(0.5px); }
+  100% { transform: translateY(0); }
+}
+
+/* Loader Screen Overlay */
+.loader-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.bios-terminal {
+  width: 80%;
+  max-width: 600px;
+  color: #00ff00;
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: left;
+  margin-bottom: 24px;
+}
+
+.bios-line {
+  margin: 4px 0;
+  min-height: 20px;
+}
+
+.progress-container {
+  width: 80%;
+  max-width: 400px;
+  height: 20px;
+  border: 2px solid #00ff00;
+  padding: 2px;
+  box-sizing: border-box;
+}
+
+.progress-bar {
+  height: 100%;
+  background: #00ff00;
+  width: 0%;
+  transition: width 0.1s ease;
+}
+
+.boot-button {
+  margin-top: 24px;
+  background: #000;
+  color: #00ff00;
+  border: 2px solid #00ff00;
+  padding: 10px 24px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+}
+
+.boot-button:hover {
+  background: #00ff00;
+  color: #000;
+  box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+}
+
+/* UI Controls Bottom Bar */
+.ui-overlay {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  gap: 16px;
+  pointer-events: auto;
+}
+
+.control-btn {
+  background: rgba(18, 18, 20, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.control-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+}
+
+.control-btn.active {
+  background: #fff;
+  color: #000;
+  border-color: #fff;
+}
+
+.status-indicator {
+  display: none;
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  left: auto;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 12px;
+  color: #00ff00;
+  border: 1px solid rgba(0, 255, 0, 0.3);
+  pointer-events: none;
+}
+
+/* HUD Overlay — Henry's InfoOverlay uses inline styles; minimal resets here */
+.hud-overlay p {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+}

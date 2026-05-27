@@ -1,0 +1,183 @@
+/* ═══════════════════════════════════════════════════════════════
+   Classic Windows 95 Minesweeper — Pixel-Perfect CSS
+   ═══════════════════════════════════════════════════════════════ */
+
+.ms-window {
+  background: #c0c0c0;
+  border: 2px solid;
+  border-color: #ffffff #808080 #808080 #ffffff;
+  padding: 2px;
+  width: fit-content;
+  font-family: 'MS Sans Serif', Tahoma, sans-serif;
+}
+
+/* ── Title Bar ── */
+.ms-titlebar {
+  background: linear-gradient(to right, #000080, #1084d0);
+  color: white;
+  font-weight: bold;
+  padding: 3px 6px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ms-titlebar-icon {
+  width: 14px;
+  height: 14px;
+  font-size: 12px;
+  line-height: 14px;
+}
+
+/* ── Menu Bar ── */
+.ms-menu {
+  background: #c0c0c0;
+  padding: 2px 6px;
+  font-size: 11px;
+  display: flex;
+  gap: 8px;
+}
+
+.ms-menu span {
+  cursor: default;
+}
+
+.ms-menu span:first-child {
+  text-decoration: underline;
+  text-underline-offset: 1px;
+}
+
+/* ── Outer Frame ── */
+.ms-frame {
+  background: #c0c0c0;
+  border: 2px solid;
+  border-color: #808080 #ffffff #ffffff #808080;
+  padding: 6px;
+}
+
+/* ── Header (counters + smiley) ── */
+.ms-header {
+  background: #c0c0c0;
+  border: 2px solid;
+  border-color: #808080 #ffffff #ffffff #808080;
+  padding: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+/* LCD-style counter (mines remaining / timer) */
+.ms-counter {
+  background: #000000;
+  color: #ff0000;
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
+  font-size: 18px;
+  padding: 2px 4px;
+  border: 1px solid;
+  border-color: #808080 #ffffff #ffffff #808080;
+  width: 39px;
+  text-align: center;
+  letter-spacing: 1px;
+  line-height: 1;
+}
+
+/* Smiley restart button */
+.ms-smiley {
+  width: 26px;
+  height: 26px;
+  background: #c0c0c0;
+  border: 2px solid;
+  border-color: #ffffff #808080 #808080 #ffffff;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+}
+
+.ms-smiley:active {
+  border-color: #808080 #ffffff #ffffff #808080;
+}
+
+/* ── Mine Grid ── */
+.ms-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 16px);
+  grid-template-rows: repeat(9, 16px);
+  gap: 0;
+  border: 2px solid;
+  border-color: #808080 #ffffff #ffffff #808080;
+}
+
+/* ── Individual Cell ── */
+.ms-cell {
+  width: 16px;
+  height: 16px;
+  background: #c0c0c0;
+  border: 2px solid;
+  border-color: #ffffff #808080 #808080 #ffffff;
+  font-weight: bold;
+  font-size: 11px;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
+.ms-cell:active:not(.ms-cell-revealed):not(.ms-cell-flagged):not(:disabled) {
+  border-color: #808080 #808080 #808080 #808080;
+  border-width: 1px;
+  padding: 1px;
+}
+
+/* Revealed cell — sunken flat look */
+.ms-cell-revealed {
+  border: 1px solid #808080;
+  border-right-color: #ffffff;
+  border-bottom-color: #ffffff;
+  background: #c0c0c0;
+  cursor: default;
+  padding: 0;
+}
+
+/* Flagged cell — stays raised, just shows flag */
+.ms-cell-flagged {
+  cursor: default;
+  font-size: 10px;
+}
+
+/* Mine that killed you — red background */
+.ms-cell-exploded {
+  background: #ff0000;
+}
+
+/* Disabled state for won/lost */
+.ms-cell:disabled {
+  cursor: default;
+}
+
+/* ── Number Colors (classic Win95 palette) ── */
+.ms-num { font-size: 11px; font-weight: bold; }
+.ms-num-1 { color: #0000ff; }
+.ms-num-2 { color: #008000; }
+.ms-num-3 { color: #ff0000; }
+.ms-num-4 { color: #000080; }
+.ms-num-5 { color: #800000; }
+.ms-num-6 { color: #008080; }
+.ms-num-7 { color: #000000; }
+.ms-num-8 { color: #808080; }
+
+/* ── Wrong flag marker (shown on loss) ── */
+.ms-wrong-flag {
+  color: #ff0000;
+  font-size: 11px;
+  font-weight: bold;
+}
