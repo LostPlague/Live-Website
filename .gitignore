@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+*.log
+
+# Test artifacts (Shadow's visual verification screenshots)
+screen-test-*.png
+
+# Heavy reverse-engineering scratch — Henry's unpacked source (research, not shipped)
+source_reconstruction/node_modules/
+source_reconstruction/webpack/
+
+# IDE / editor
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

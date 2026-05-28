@@ -14,6 +14,9 @@ export class MonitorScreen {
   cssObject!: CSS3DObject;
   occlusionMesh!: THREE.Mesh;
   private iframeEl!: HTMLIFrameElement;
+  private dimmingPlane?: THREE.Mesh;
+  private monitorPos = new THREE.Vector3(0, 950, 255);
+  private monitorRot = new THREE.Euler(-3 * THREE.MathUtils.DEG2RAD, 0, 0);
 
   // Henry's edge-triggered hover state
   private inComputer = false;
@@ -117,9 +120,6 @@ export class MonitorScreen {
   }
 
   private init() {
-    const monitorPos = new THREE.Vector3(0, 950, 255);
-    const monitorRot = new THREE.Euler(-3 * THREE.MathUtils.DEG2RAD, 0, 0);
-
     // Create containing div for CSS3DObject
     const iframeContainer = document.createElement('div');
     iframeContainer.style.width = `${SCREEN_SIZE.w}px`;
@@ -134,7 +134,7 @@ export class MonitorScreen {
     iframe.style.padding = `${IFRAME_PADDING}px`;
     iframe.style.boxSizing = 'border-box';
     iframe.style.opacity = '1';
-    iframe.style.filter = 'brightness(1.35) contrast(0.95)';
+    iframe.className = 'jitter';  // Henry's CRT flicker animation
     iframe.frameBorder = '0';
     iframe.title = 'HeffernanOS';
     this.iframeEl = iframe;
@@ -180,8 +180,8 @@ export class MonitorScreen {
 
     // Instantiate CSS3D Object
     this.cssObject = new CSS3DObject(iframeContainer);
-    this.cssObject.position.copy(monitorPos);
-    this.cssObject.rotation.copy(monitorRot);
+    this.cssObject.position.copy(this.monitorPos);
+    this.cssObject.rotation.copy(this.monitorRot);
     this.experience.cssScene.add(this.cssObject);
 
     // Create transparent WebGL occlusion mesh (NoBlending window)
@@ -191,17 +191,94 @@ export class MonitorScreen {
       opacity: 0,
       transparent: true,
       blending: THREE.NoBlending,
+      depthWrite: false,
+      depthFunc: THREE.LessEqualDepth,
     });
     this.occlusionMesh = new THREE.Mesh(occlusionGeo, occlusionMat);
     this.occlusionMesh.position.copy(this.cssObject.position);
     this.occlusionMesh.rotation.copy(this.cssObject.rotation);
     this.occlusionMesh.scale.copy(this.cssObject.scale);
     this.experience.scene.add(this.occlusionMesh);
+
+    // --- Henry's enclosing planes (4 side walls, color 0x48493f) ---
+    // maxOffset from World.ts texture layers: smudges at z+96 is highest
+    const maxOffset = 96;
+    this.createEnclosingPlanes(maxOffset);
+    this.createPerspectiveDimmer(maxOffset);
+  }
+
+  /**
+   * Creates enclosing planes for the computer screen — ported from Henry's MonitorScreen.ts
+   */
+  private createEnclosingPlanes(maxOffset: number) {
+    const screenSize = new THREE.Vector2(SCREEN_SIZE.w, SCREEN_SIZE.h);
+    const planes = {
+      left: {
+        size: new THREE.Vector2(maxOffset, screenSize.y),
+        position: this.offsetPosition(this.monitorPos, new THREE.Vector3(-screenSize.x / 2, 0, maxOffset / 2)),
+        rotation: new THREE.Euler(0, 90 * THREE.MathUtils.DEG2RAD, 0),
+      },
+      right: {
+        size: new THREE.Vector2(maxOffset, screenSize.y),
+        position: this.offsetPosition(this.monitorPos, new THREE.Vector3(screenSize.x / 2, 0, maxOffset / 2)),
+        rotation: new THREE.Euler(0, 90 * THREE.MathUtils.DEG2RAD, 0),
+      },
+      top: {
+        size: new THREE.Vector2(screenSize.x, maxOffset),
+        position: this.offsetPosition(this.monitorPos, new THREE.Vector3(0, screenSize.y / 2, maxOffset / 2)),
+        rotation: new THREE.Euler(90 * THREE.MathUtils.DEG2RAD, 0, 0),
+      },
+      bottom: {
+        size: new THREE.Vector2(screenSize.x, maxOffset),
+        position: this.offsetPosition(this.monitorPos, new THREE.Vector3(0, -screenSize.y / 2, maxOffset / 2)),
+        rotation: new THREE.Euler(90 * THREE.MathUtils.DEG2RAD, 0, 0),
+      },
+    };
+
+    for (const [_, plane] of Object.entries(planes)) {
+      const material = new THREE.MeshBasicMaterial({
+        side: THREE.DoubleSide,
+        color: 0x48493f,
+      });
+      const geometry = new THREE.PlaneGeometry(plane.size.x, plane.size.y);
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.copy(plane.position);
+      mesh.rotation.copy(plane.rotation);
+      this.experience.scene.add(mesh);
+    }
+  }
+
+  /**
+   * PerspectiveDimmer — ported from Henry's MonitorScreen.ts
+   * Black AdditiveBlending plane at maxOffset-5, dims based on camera distance/angle
+   */
+  private createPerspectiveDimmer(maxOffset: number) {
+    const material = new THREE.MeshBasicMaterial({
+      side: THREE.DoubleSide,
+      color: 0x000000,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+    });
+    const plane = new THREE.PlaneGeometry(SCREEN_SIZE.w, SCREEN_SIZE.h);
+    const mesh = new THREE.Mesh(plane, material);
+    mesh.position.copy(this.offsetPosition(this.monitorPos, new THREE.Vector3(0, 0, maxOffset - 5)));
+    mesh.rotation.copy(this.monitorRot);
+    this.dimmingPlane = mesh;
+    this.experience.scene.add(mesh);
+  }
+
+  /**
+   * Offsets a position vector by another vector — Henry's utility
+   */
+  private offsetPosition(position: THREE.Vector3, offset: THREE.Vector3): THREE.Vector3 {
+    const newPosition = new THREE.Vector3();
+    newPosition.copy(position);
+    newPosition.add(offset);
+    return newPosition;
   }
 
   public update(cameraPosition: THREE.Vector3) {
-    const monitorPos = new THREE.Vector3(0, 950, 255);
-    const toCamera = cameraPosition.clone().sub(monitorPos).normalize();
+    const toCamera = cameraPosition.clone().sub(this.monitorPos).normalize();
     const monitorForward = new THREE.Vector3(0, 0, 1); // monitor faces +Z
     const dot = toCamera.dot(monitorForward);
     
@@ -209,6 +286,28 @@ export class MonitorScreen {
     if (this.iframeEl) {
       this.iframeEl.style.opacity = dot < 0 ? '0' : '1';
       this.iframeEl.style.pointerEvents = dot < 0 ? 'none' : 'auto';
+    }
+
+    // PerspectiveDimmer update — Henry's exact formula
+    if (this.dimmingPlane) {
+      const planeNormal = new THREE.Vector3(0, 0, 1);
+      const viewVector = new THREE.Vector3();
+      viewVector.copy(cameraPosition);
+      viewVector.sub(this.monitorPos);
+      viewVector.normalize();
+      const viewDot = viewVector.dot(planeNormal);
+
+      const dimPos = this.dimmingPlane.position;
+      const distance = Math.sqrt(
+        Math.pow(cameraPosition.x - dimPos.x, 2) +
+        Math.pow(cameraPosition.y - dimPos.y, 2) +
+        Math.pow(cameraPosition.z - dimPos.z, 2)
+      );
+      const opacity = 1 / (distance / 10000);
+      const DIM_FACTOR = 0.7;
+      // @ts-ignore
+      this.dimmingPlane.material.opacity =
+        (1 - opacity) * DIM_FACTOR + (1 - viewDot) * DIM_FACTOR;
     }
   }
 

@@ -7,6 +7,7 @@ export class World {
   loadedTextures: Record<string, THREE.Texture> = {};
   
   smudgesMesh?: THREE.Mesh;
+  shadowMesh?: THREE.Mesh;
 
   videoElement1?: HTMLVideoElement;
   videoElement2?: HTMLVideoElement;
@@ -148,7 +149,13 @@ export class World {
     this.videoTexture1.colorSpace = THREE.SRGBColorSpace;
     const videoMat1 = new THREE.MeshBasicMaterial({
       map: this.videoTexture1,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      blendSrc: THREE.SrcAlphaFactor,
+      blendDst: THREE.OneFactor,
+      blendEquationAlpha: THREE.AddEquation,
+      blendSrcAlpha: THREE.ZeroFactor,
+      blendDstAlpha: THREE.OneFactor,
       side: THREE.DoubleSide,
       opacity: 0.5,
       transparent: true,
@@ -156,7 +163,7 @@ export class World {
     });
     this.videoMesh1 = new THREE.Mesh(occlusionGeo, videoMat1);
     this.videoMesh1.position.copy(monitorPos);
-    this.videoMesh1.position.z += 2;
+    this.videoMesh1.position.z += 40;  // Henry: offset 10 * scaleFactor 4 = 40
     this.videoMesh1.rotation.copy(monitorRot);
     this.experience.scene.add(this.videoMesh1);
 
@@ -174,7 +181,13 @@ export class World {
     this.videoTexture2.colorSpace = THREE.SRGBColorSpace;
     const videoMat2 = new THREE.MeshBasicMaterial({
       map: this.videoTexture2,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      blendSrc: THREE.SrcAlphaFactor,
+      blendDst: THREE.OneFactor,
+      blendEquationAlpha: THREE.AddEquation,
+      blendSrcAlpha: THREE.ZeroFactor,
+      blendDstAlpha: THREE.OneFactor,
       side: THREE.DoubleSide,
       opacity: 0.1,
       transparent: true,
@@ -182,7 +195,7 @@ export class World {
     });
     this.videoMesh2 = new THREE.Mesh(occlusionGeo, videoMat2);
     this.videoMesh2.position.copy(monitorPos);
-    this.videoMesh2.position.z += 4;
+    this.videoMesh2.position.z += 60;  // Henry: offset 15 * scaleFactor 4 = 60
     this.videoMesh2.rotation.copy(monitorRot);
     this.experience.scene.add(this.videoMesh2);
 
@@ -191,19 +204,64 @@ export class World {
     smudgesTexture.colorSpace = THREE.SRGBColorSpace;
     const smudgesMat = new THREE.MeshBasicMaterial({
       map: smudgesTexture,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      blendSrc: THREE.SrcAlphaFactor,
+      blendDst: THREE.OneFactor,
+      blendEquationAlpha: THREE.AddEquation,
+      blendSrcAlpha: THREE.ZeroFactor,
+      blendDstAlpha: THREE.OneFactor,
       side: THREE.DoubleSide,
       opacity: 0.12,
       transparent: true,
     });
     this.smudgesMesh = new THREE.Mesh(occlusionGeo, smudgesMat);
     this.smudgesMesh.position.copy(monitorPos);
-    this.smudgesMesh.position.z += 10;
+    this.smudgesMesh.position.z += 96;  // Henry: offset 24 * scaleFactor 4 = 96
     this.smudgesMesh.rotation.copy(monitorRot);
     this.experience.scene.add(this.smudgesMesh);
+
+    // Inner shadow layer (NormalBlending, opacity: 1) — Henry's monitorShadowTexture
+    const shadowTexture = textureLoader.load('/textures/shadow-compressed.png');
+    shadowTexture.colorSpace = THREE.SRGBColorSpace;
+    const shadowMat = new THREE.MeshBasicMaterial({
+      map: shadowTexture,
+      blending: THREE.NormalBlending,
+      side: THREE.DoubleSide,
+      opacity: 0.5,
+      transparent: true,
+      depthWrite: false,
+    });
+    this.shadowMesh = new THREE.Mesh(occlusionGeo, shadowMat);
+    this.shadowMesh.visible = false;
+    this.shadowMesh.position.copy(monitorPos);
+    this.shadowMesh.position.z += 20;   // Henry's offset: 5 * scaleFactor(4) = 20
+    this.shadowMesh.rotation.copy(monitorRot);
+    this.experience.scene.add(this.shadowMesh);
+  }
+
+  public startVideos() {
+    if (this.videoElement1) {
+      this.videoElement1.play().catch((err) => console.error("Video 1 retry play error:", err));
+    }
+    if (this.videoElement2) {
+      this.videoElement2.play().catch((err) => console.error("Video 2 retry play error:", err));
+    }
+    // Diagnostic — confirms videos actually started after the user-gesture retry
+    setTimeout(() => {
+      console.log('[Light diag] video1.paused =', this.videoElement1?.paused, '| video2.paused =', this.videoElement2?.paused);
+    }, 1000);
   }
 
   public destroy() {
+    if (this.shadowMesh) {
+      this.experience.scene.remove(this.shadowMesh);
+      if (this.shadowMesh.material instanceof THREE.Material) {
+        this.shadowMesh.material.dispose();
+      }
+      this.shadowMesh.geometry.dispose();
+    }
+
     if (this.smudgesMesh) {
       this.experience.scene.remove(this.smudgesMesh);
       if (this.smudgesMesh.material instanceof THREE.Material) {

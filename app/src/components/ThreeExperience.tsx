@@ -6,6 +6,7 @@ export const ThreeExperience: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const webglRef = useRef<HTMLDivElement>(null);
   const cssRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
 
   // Experience instance reference
   const experienceInstanceRef = useRef<Experience | null>(null);
@@ -67,6 +68,7 @@ export const ThreeExperience: React.FC = () => {
       container: containerRef.current,
       webglContainer: webglRef.current,
       cssContainer: cssRef.current,
+      overlayContainer: overlayRef.current,   // ADD THIS
       onProgress: (prog) => setProgress(prog),
       onBiosLine: (line) => {
         targetLinesRef.current.push(line);
@@ -113,6 +115,7 @@ export const ThreeExperience: React.FC = () => {
     setBooted(true);
     experienceInstanceRef.current?.camera.triggerTransition('idle', 2500);
     experienceInstanceRef.current?.audioManager.startAmbient();
+    experienceInstanceRef.current?.world.startVideos();
   };
 
   const handleMuteToggle = (muted: boolean) => {
@@ -160,6 +163,9 @@ export const ThreeExperience: React.FC = () => {
 
       {/* CSS3D Renderer Layer */}
       <div id="css" ref={cssRef} />
+
+      {/* Overlay — noise grain, soft-light CSS blend */}
+      <div id="overlay" ref={overlayRef} />
 
       {/* Retro BIOS Loading Overlay */}
       {!booted && (

@@ -63,6 +63,16 @@ html, body, #root {
   pointer-events: none; /* ← events pass through CSS3D container */
 }
 
+#overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 15;
+  pointer-events: none;
+}
+
 /* ADD THIS new rule — iframe can receive mouse events directly */
 #computer-screen {
   pointer-events: auto;
