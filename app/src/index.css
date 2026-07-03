@@ -8,7 +8,12 @@ html, body {
   overflow: hidden;
 }
 
-h1, h2, h3, h4, h5, p {
+/* Shell (HUD/BIOS) typography — scoped to the 3D experience root. This was
+   a bare element global, and since the OS route shares this bundle it painted
+   every showcase heading/paragraph WHITE on the white window (invisible
+   content). Henry's OS document has no such global — its text is black. */
+#experience-container h1, #experience-container h2, #experience-container h3,
+#experience-container h4, #experience-container h5, #experience-container p {
   font-family: monospace;
   font-weight: 400;
   color: white;
@@ -16,7 +21,8 @@ h1, h2, h3, h4, h5, p {
 }
 
 @media only screen and (max-width: 768px) {
-  h1, h2, h3, h4, h5, p {
+  #experience-container h1, #experience-container h2, #experience-container h3,
+  #experience-container h4, #experience-container h5, #experience-container p {
     font-size: 10px;
   }
 }

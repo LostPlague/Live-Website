@@ -1,14 +1,31 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
 
 interface HUDOverlayProps {
   onMuteToggle: (muted: boolean) => void;
   isMuted: boolean;
   onFreeCamToggle: () => void;
   isOrbit: boolean;
+  /** false while the camera is in the monitor view — HUD slides out (Henry's InterfaceUI) */
+  visible: boolean;
 }
 
-const NAME_TEXT = 'Henry Heffernan';
-const TITLE_TEXT = 'Software Engineer';
+// Henry's InterfaceUI.tsx `vars` — verbatim
+const hudVariants = {
+  visible: {
+    opacity: 1,
+    x: 0,
+    transition: { duration: 0.5, delay: 0.3, ease: 'easeOut' as const },
+  },
+  hide: {
+    x: -32,
+    opacity: 0,
+    transition: { duration: 0.3, ease: 'easeOut' as const },
+  },
+};
+
+const NAME_TEXT = 'Mohamed Tabari';
+const TITLE_TEXT = 'QA Engineer';
 
 /**
  * Ported 1:1 from Henry's InfoOverlay.tsx.
@@ -22,6 +39,7 @@ export const HUDOverlay: React.FC<HUDOverlayProps> = ({
   isMuted,
   onFreeCamToggle,
   isOrbit,
+  visible,
 }) => {
   const [nameText, setNameText] = useState('');
   const [titleText, setTitleText] = useState('');
@@ -53,6 +71,10 @@ export const HUDOverlay: React.FC<HUDOverlayProps> = ({
     if (i < text.length) {
       setTimeout(() => {
         setText(curText + text[i]);
+        // Henry plays a "ccType" tick per typed char. Route it through the audio
+        // manager (which owns the WebAudio context and applies Henry's exact
+        // config: volume 0.1, detune 2000 cents) via the same postMessage bridge.
+        window.postMessage({ type: 'ccType' }, '*');
         typeText(i + 1, curText + text[i], text, setText, callback, refOverride);
       }, Math.random() * 50 + 50);
     } else {
@@ -105,7 +127,12 @@ export const HUDOverlay: React.FC<HUDOverlayProps> = ({
 
 
   return (
-    <div style={styles.wrapper}>
+    <motion.div
+      initial="hide"
+      variants={hudVariants}
+      animate={visible ? 'visible' : 'hide'}
+      style={{ ...styles.wrapper, pointerEvents: visible ? 'auto' : 'none' }}
+    >
       {nameText !== '' && (
         <div style={styles.container} id="prevent-click">
           <p style={{ margin: 0 }}>{nameText}</p>
@@ -177,7 +204,7 @@ export const HUDOverlay: React.FC<HUDOverlayProps> = ({
           )}
         </div>
       )}
-    </div>
+    </motion.div>
   );
 };
 

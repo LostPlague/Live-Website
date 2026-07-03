@@ -136,7 +136,7 @@ export class MonitorScreen {
     iframe.style.opacity = '1';
     iframe.className = 'jitter';  // Henry's CRT flicker animation
     iframe.frameBorder = '0';
-    iframe.title = 'HeffernanOS';
+    iframe.title = 'TabariOS';
     this.iframeEl = iframe;
 
     // Henry's exact bridge — re-dispatches inner iframe events with inComputer=true
@@ -249,8 +249,14 @@ export class MonitorScreen {
   }
 
   /**
-   * PerspectiveDimmer — ported from Henry's MonitorScreen.ts
-   * Black AdditiveBlending plane at maxOffset-5, dims based on camera distance/angle
+   * PerspectiveDimmer — Henry's verbatim MonitorScreen.ts code.
+   * Black plane at maxOffset-5. It dims NOT by adding color (black adds 0)
+   * but by accumulating CANVAS ALPHA, which occludes the OS iframe behind
+   * the WebGL canvas (shown = canvas + iframe*(1-alpha)). update() raises
+   * its opacity with camera distance/angle → screen dims at far/side views.
+   * Engine is pinned to his three r135, where AdditiveBlending accumulates
+   * alpha as srcAlpha² (weak, correct). Do NOT upgrade three: 0.184 changed
+   * the alpha factors to (ONE, ONE), which over-darkens far/angled views.
    */
   private createPerspectiveDimmer(maxOffset: number) {
     const material = new THREE.MeshBasicMaterial({

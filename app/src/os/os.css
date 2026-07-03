@@ -1,8 +1,61 @@
+/* Henry's Adobe Typekit kit — lores-15-bold-alt-oakland (Start button text +
+   window title bars). Same kit URL his deployed index.html loads.
+   NOTE: @import must precede all other rules. */
+@import url('https://use.typekit.net/llo2eru.css');
+
 /* ═══════════════════════════════════════════════════════════════
-   HeffernanOS Desktop — ported verbatim from Henry's Toolbar.tsx + Desktop.tsx
+   TabariOS Desktop — ported verbatim from Henry's Toolbar.tsx + Desktop.tsx
+   + his deployed main.c4751a8b.css (global rules + classes).
+   Henry has NO global border-box: all his fixed sizes are content-box math.
    ═══════════════════════════════════════════════════════════════ */
 
-* { box-sizing: border-box; }
+/* ── Henry's bitmap fonts. The .ttf files already ship in /public/fonts but
+      were never @font-face'd, so 'Terminal' (Start sidebar) and 'MS Sans Serif'
+      fell back to Courier/Tahoma — wrong font. Henry names them Terminal +
+      MSSerif (his MSSerif === MS Sans Serif file). Declare all three. ── */
+@font-face {
+  font-family: 'Terminal';
+  src: url('/fonts/Terminal.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'MS Sans Serif';
+  src: url('/fonts/MSSansSerif.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'MSSerif';
+  src: url('/fonts/MSSansSerif.ttf') format('truetype');
+  font-display: swap;
+}
+/* Henry's Millennium faces (his deployed default <p> font) */
+@font-face {
+  font-family: 'Millennium';
+  src: url('/fonts/Millennium.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'MillenniumBold';
+  src: url('/fonts/Millennium-Bold.ttf') format('truetype');
+  font-display: swap;
+}
+
+/* Henry's deployed globals — scoped under .os-desktop because os.css ships
+   in the same SPA bundle as the 3D shell and must not leak outside the OS.
+   (His `* { box-sizing: border-box }` DOES NOT EXIST — that rule was ours,
+   and it silently shrank every fixed-height box vs his content-box math.) */
+.os-desktop, .os-desktop * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* :where() keeps specificity at (0,0,1) — identical to Henry's bare `p`
+   global, so class rules (.os-toolbar-text etc.) override it like on his site. */
+:where(.os-desktop) p {
+  margin: 0;
+  font-family: 'Millennium', 'Times New Roman', Times, serif;
+  font-size: 18px;
+}
 
 html, body, #root {
   margin: 0;
@@ -19,6 +72,11 @@ html, body, #root {
   height: 100vh;
   overflow: hidden;
   font-family: 'MS Sans Serif', Tahoma, sans-serif;
+  /* Win9x base text is black (Henry's default). The global app theme sets
+     body { color: white } which cascades into this OS iframe and wrongly
+     whitened the Start label / taskbar / clock text. Scope it back to black;
+     desktop shortcut labels (.os-shortcut-label) stay white via their own rule. */
+  color: #000000;
 }
 
 /* ── Shortcuts (top-left, Henry's Desktop.tsx) ── */
@@ -55,12 +113,12 @@ html, body, #root {
 }
 
 .os-shortcut-label {
+  /* Henry's shortcutText: MSSerif 8px, white, padding L/R 2 — NO text-shadow */
   margin: 0;
   color: white;
-  font-family: 'MS Sans Serif', Tahoma, sans-serif;
+  font-family: 'MSSerif', 'MS Sans Serif', sans-serif;
   font-size: 8px;
   padding: 2px;
-  text-shadow: 1px 1px 0 rgba(0,0,0,0.5);
 }
 
 
@@ -85,11 +143,11 @@ html, body, #root {
 }
 
 .os-toolbar {
+  /* Henry: flexGrow 1, width 100% — NO align-items/height. Children (Start
+     button, tabs) stretch to the row's content height (the Start button). */
   display: flex;
   flex-grow: 1;
   width: 100%;
-  align-items: center;
-  height: 100%;
 }
 
 /* ── Start button (Henry's startContainerOuter / startContainer) ── */
@@ -123,6 +181,15 @@ html, body, #root {
   border: 1px solid #86898d !important;
   border-bottom-color: #c3c6ca !important;
   border-right-color: #c3c6ca !important;
+  /* Henry's activeTabInner: white 4px checkerboard fill + pointer-events none */
+  background-image:
+    linear-gradient(45deg, white 25%, transparent 25%),
+    linear-gradient(-45deg, white 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, white 75%),
+    linear-gradient(-45deg, transparent 75%, white 75%);
+  background-size: 4px 4px;
+  background-position: 0 0, 0 2px, 2px -2px, -2px 0px;
+  pointer-events: none;
 }
 
 .os-start-icon {
@@ -130,17 +197,13 @@ html, body, #root {
   font-size: 14px;
 }
 
+/* Henry's deployed css: .toolbar-text { font-family: lores-15-bold-alt-oakland;
+   color: #000; font-size: 18px } — NOT bold MS Sans at 14px. */
 .os-toolbar-text {
   margin: 0;
-  font-size: 14px;
-  font-family: 'MS Sans Serif', Tahoma, sans-serif;
-  font-weight: bold;
-}
-
-.os-tabs-container {
-  flex: 1;
-  margin-left: 4px;
-  margin-right: 4px;
+  font-size: 18px;
+  font-family: 'lores-15-bold-alt-oakland', 'MSSerif', sans-serif;
+  color: #000000;
 }
 
 /* ── Time + Volume (Henry's time style) ── */
@@ -168,6 +231,7 @@ html, body, #root {
   margin: 0;
   font-size: 12px;
   font-family: 'MS Sans Serif', Tahoma, sans-serif;
+  color: #000000; /* overrides global `p { color: white }` */
 }
 
 /* ── Start menu (Henry's startWindow + startWindowInner) ── */
@@ -176,6 +240,11 @@ html, body, #root {
   bottom: 28px;
   left: 4px;
   width: 256px;
+  /* Henry's menu height is set by his vertical "HeffernanOS" sidebar text:
+     171px extent (32px Terminal + 1px spacing) + 8 top + 64 bottom padding
+     + 4px borders = 247px. "TabariOS" is shorter, so we pin the measured
+     Henry height explicitly to keep the menu box 1:1. */
+  height: 247px;
   display: flex;
   flex: 1;
   box-sizing: border-box;
@@ -200,21 +269,20 @@ html, body, #root {
   background: #86898d;
   display: flex;
   align-items: flex-end;
-  min-width: 30px;
 }
 
 .os-start-sidebar-text {
   margin: 0;
   font-family: 'Terminal', 'Courier New', monospace;
-  font-size: 28px;
-  padding: 4px 4px 64px 4px;
+  font-size: 32px;            /* Henry's verticalText: 32 (was 28) */
+  padding: 8px 4px 64px 4px;  /* Henry: paddingTop 8, paddingBottom 64 */
   letter-spacing: 1px;
   color: #c3c6ca;
   transform: scale(-1);
   -webkit-transform: scale(-1);
   writing-mode: vertical-rl;
   -webkit-writing-mode: vertical-rl;
-  font-weight: bold;
+  /* Henry's verticalText has NO bold — removing it to match 1:1 */
 }
 
 .os-start-content {
@@ -224,7 +292,7 @@ html, body, #root {
   justify-content: flex-end;
 }
 
-.os-start-spacer { flex: 1; min-height: 120px; }
+.os-start-spacer { flex: 1; } /* Henry's startMenuSpace: flex 1 only */
 
 .os-start-divider {
   height: 1px;
@@ -235,6 +303,9 @@ html, body, #root {
 .os-start-option {
   display: flex;
   align-items: center;
+  /* Henry: height 24 + padding 12 in CONTENT-box → 48px total. Our old
+     global border-box squeezed this to 24px — the "shutdown box too small". */
+  box-sizing: content-box;
   height: 24px;
   padding: 12px;
   cursor: pointer;
@@ -258,10 +329,18 @@ html, body, #root {
   justify-content: center;
 }
 
+.os-start-option-icon-img {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
 .os-start-option-text {
   margin: 0 0 0 8px;
   font-size: 14px;
   font-family: 'MS Sans Serif', Tahoma, sans-serif;
+  color: #000000; /* overrides global `p { color: white }`; turns white on hover via .os-start-option:hover rule */
 }
 
 /* ── Selection & Shortcut Overlays ── */
@@ -304,18 +383,19 @@ html, body, #root {
   text-shadow: none;
 }
 
-/* ── Taskbar Tabs ── */
+/* ── Taskbar Tabs (Henry's toolbarTabsContainer / tabContainerOuter) ── */
 .os-tabs-container {
+  /* Henry: flex 1, marginLeft/Right 4 — no align/height/overflow. Tabs
+     stretch to the toolbar row height (set by the Start button). */
   flex: 1;
   display: flex;
-  align-items: center;
   margin-left: 4px;
   margin-right: 4px;
-  height: 100%;
-  overflow: hidden;
 }
 
 .os-tab-outer {
+  /* Henry: no fixed height — the tab stretches to the toolbar row. Our old
+     hardcoded 22px was the "taskbar app size" mismatch. */
   display: flex;
   flex: 1;
   max-width: 300px;
@@ -325,8 +405,6 @@ html, body, #root {
   border: 1px solid #FFFFFF;
   border-bottom-color: #000000;
   border-right-color: #000000;
-  height: 22px;
-  align-items: stretch;
 }
 
 .os-tab-inner {
@@ -341,18 +419,27 @@ html, body, #root {
 }
 
 .os-tab-icon {
+  /* Henry: Icon size 18, marginRight 6 */
   margin-right: 6px;
-  font-size: 14px;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .os-tab-text {
+  /* Henry's tabText: fontSize 14, MSSerif (was wrongly 11px) */
   margin: 0;
-  font-size: 11px;
-  font-family: 'MS Sans Serif', Tahoma, sans-serif;
+  font-size: 14px;
+  font-family: 'MSSerif', 'MS Sans Serif', sans-serif;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: #000000;
 }
 
 /* ── Start button quad-flag & Volume speaker icons ── */
@@ -365,10 +452,338 @@ html, body, #root {
 }
 
 .os-volume-icon-img {
+  /* Henry sets only height 18 — width follows the png's aspect (16×21) */
   cursor: pointer;
   height: 18px;
-  width: 18px;
+  width: auto;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
 
+
+/* ═══════════════════════════════════════════════════════════════
+   Showcase site styles — from Henry's deployed main.c4751a8b.css.
+   Headings/globals scoped with :where(.os-desktop) to match his bare-
+   selector specificity; page classes are showcase-only names.
+   ═══════════════════════════════════════════════════════════════ */
+:where(.os-desktop) h1, :where(.os-desktop) h2, :where(.os-desktop) h3,
+:where(.os-desktop) h4, :where(.os-desktop) h5, :where(.os-desktop) h6 {
+  margin: 0;
+}
+:where(.os-desktop) h1 { font-family: gastromond, sans-serif; font-size: 64px; }
+:where(.os-desktop) h2 { font-family: MillenniumBold, 'Times New Roman', Times, serif; font-size: 32px; }
+:where(.os-desktop) h3 { font-family: MillenniumBold, 'Times New Roman', Times, serif; font-size: 24px; letter-spacing: 0; }
+:where(.os-desktop) h4 { font-family: MillenniumBold, 'Times New Roman', Times, serif; font-size: 18px; letter-spacing: 0; }
+:where(.os-desktop) b { font-family: MillenniumBold, 'Times New Roman', Times, serif; }
+
+.site-page {
+  bottom: 0;
+  display: flex;
+  left: 0;
+  overflow: hidden;
+  position: absolute;
+  right: 0;
+  top: 0;
+  transform: translateZ(0);
+}
+
+/* Henry's global `div { display: flex }` — his showcase layout depends on it.
+   Scoped to the showcase tree so the rest of the OS (Minesweeper) keeps
+   normal block divs. */
+.site-page div { display: flex; }
+
+.site-page-content {
+  display: flex;
+  flex-direction: column;
+  margin-left: 300px;
+  overflow-y: scroll;
+  padding: 32px 64px 64px 16px;
+  width: 100%;
+}
+
+.text-block {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 32px;
+  margin-top: 16px;
+  text-align: justify;
+}
+
+.captioned-image {
+  align-items: center;
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 32px;
+  text-align: center;
+  width: 100%;
+}
+.captioned-image img { width: 100%; }
+
+.router-link:visited { color: purple; }
+
+/* Henry's Win98-style form fields (scoped to the showcase) */
+.site-page input, .site-page textarea {
+  border: none;
+  box-shadow: inset -1px -1px #fff, inset 1px 1px grey, inset -2px -2px #747474, inset 2px 2px #2b2b2b;
+  box-sizing: border-box;
+  font-family: Millennium, sans-serif;
+  font-size: 18px;
+  padding: 4px 8px;
+  resize: none;
+  width: 100%;
+}
+.site-page textarea { height: 150px; }
+.site-page input:active, .site-page input:focus,
+.site-page textarea:active, .site-page textarea:focus {
+  background-color: #fbffc4;
+  outline: none;
+}
+
+.site-button {
+  background: #e9e9e9;
+  border: none;
+  border-radius: 0;
+  box-shadow: inset -1px -1px #2b2b2b, inset 1px 1px #fff, inset -2px -2px grey, inset 2px 2px #747474;
+  box-sizing: border-box;
+  color: #000;
+  cursor: pointer;
+  font-family: Millennium, sans-serif;
+  font-size: 18px;
+  overflow: hidden;
+  padding: 4px 12px;
+  user-select: none;
+}
+.site-button:hover { background-color: silver; }
+.site-button:active, .site-button:disabled { background-color: grey; }
+.site-button:disabled { cursor: not-allowed; }
+
+.big-button-container {
+  background: #e9e9e9;
+  border: none;
+  border-radius: 0;
+  box-shadow: inset -1px -1px #2b2b2b, inset 1px 1px #fff, inset -2px -2px grey, inset 2px 2px #747474;
+  cursor: pointer;
+  overflow: hidden;
+  padding: 12px;
+}
+.big-button-container:hover { background-color: #e9e9e9; }
+.big-button-container:active { background-color: silver; box-shadow: inset -2px -2px grey, inset 2px 2px #747474, inset -1px -1px #2b2b2b, inset 1px 1px #fff; }
+
+/* Shortcut icon image + taskbar tab png icon (Henry's Icon component sizes) */
+.os-shortcut-icon-img {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+.os-tab-icon-img {
+  width: 18px;
+  height: 18px;
+  margin-right: 6px;
+  flex-shrink: 0;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Henry's deployed css: li { margin-bottom: 16px } — uniform bullet spacing
+   for the Experience/About lists. Scoped to the showcase tree so it can't
+   leak elsewhere. Combined with folding each job's lead line into the <ul>,
+   this makes every bullet evenly spaced (fixes the big gap after bullet 1). */
+.site-page li { margin-bottom: 16px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   New desktop apps — Internet Explorer / Hit Radio / Secret Files.
+   Win98 field + button treatments reuse the OS palette.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* shared raised Win98 button */
+.app-win98-button {
+  background: #c3c6ca;
+  border: none;
+  border-radius: 0;
+  box-shadow: inset -1px -1px #000, inset 1px 1px #fff, inset -2px -2px #86898d, inset 2px 2px #e6e8ea;
+  color: #000;
+  cursor: pointer;
+  font-family: 'MSSerif', 'MS Sans Serif', sans-serif;
+  font-size: 14px;
+  padding: 4px 16px;
+  min-width: 88px;
+}
+.app-win98-button:active { box-shadow: inset 1px 1px #000, inset -1px -1px #fff, inset 2px 2px #86898d; }
+.app-win98-button:disabled { color: #86898d; cursor: default; }
+
+/* ── Internet Explorer ── */
+.app-ie {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: #c3c6ca;
+}
+.app-ie-toolbar {
+  display: flex;
+  align-items: center;
+  padding: 3px 4px;
+  border-bottom: 1px solid #86898d;
+  box-shadow: 0 1px 0 #fff;
+  flex-shrink: 0;
+}
+.app-ie-address-label {
+  margin: 0 6px 0 2px;
+  font-family: 'MSSerif', 'MS Sans Serif', sans-serif;
+  font-size: 12px;
+  color: #000;
+}
+.app-ie-address {
+  flex: 1;
+  border: none;
+  box-shadow: inset -1px -1px #fff, inset 1px 1px #86898d, inset -2px -2px #c3c6ca, inset 2px 2px #000;
+  background: #fff;
+  font-family: 'MSSerif', 'MS Sans Serif', sans-serif;
+  font-size: 12px;
+  padding: 3px 6px;
+  color: #000;
+  cursor: default;
+}
+.app-ie-frame {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: #fff;
+}
+
+/* ── Hit Radio ── */
+.app-radio {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: #c3c6ca;
+  padding: 12px;
+  box-sizing: border-box;
+  gap: 12px;
+}
+.app-radio-display {
+  flex: 1;
+  background: #001a00;
+  box-shadow: inset -1px -1px #fff, inset 1px 1px #86898d, inset -2px -2px #c3c6ca, inset 2px 2px #000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.app-radio-freq {
+  margin: 0;
+  font-family: monospace;
+  font-size: 26px;
+  letter-spacing: 4px;
+  color: #00ff41;
+  text-shadow: 0 0 6px rgba(0, 255, 65, 0.6);
+}
+.app-radio-status {
+  margin: 0;
+  font-family: monospace;
+  font-size: 13px;
+  color: #00c832;
+}
+.app-radio-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.app-radio-volume {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.app-radio-vol-label {
+  margin: 0;
+  font-family: 'MSSerif', 'MS Sans Serif', sans-serif;
+  font-size: 12px;
+  color: #000;
+}
+.app-radio-volume input[type='range'] { width: 110px; }
+
+/* ── Secret Files ── */
+.app-secret-lock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: #c3c6ca;
+  padding: 24px;
+  box-sizing: border-box;
+  text-align: center;
+}
+.app-secret-lock-icon {
+  width: 48px;
+  height: 48px;
+  image-rendering: pixelated;
+  margin-bottom: 12px;
+}
+.app-secret-title {
+  margin: 0;
+  font-family: 'MSSerif', 'MS Sans Serif', sans-serif;
+  font-size: 13px;
+  font-weight: bold;
+  color: #000;
+  letter-spacing: 1px;
+}
+.app-secret-question {
+  margin: 0;
+  font-family: 'Millennium', 'Times New Roman', serif;
+  font-size: 18px;
+  color: #000;
+}
+.app-secret-input {
+  border: none;
+  box-shadow: inset -1px -1px #fff, inset 1px 1px #86898d, inset -2px -2px #c3c6ca, inset 2px 2px #000;
+  background: #fff;
+  font-family: 'MSSerif', 'MS Sans Serif', sans-serif;
+  font-size: 14px;
+  padding: 5px 8px;
+  width: 240px;
+  text-align: center;
+  color: #000;
+}
+.app-secret-denied {
+  margin: 10px 0 0;
+  min-height: 16px;
+  font-family: monospace;
+  font-size: 13px;
+  font-weight: bold;
+  color: #c00000;
+}
+.app-secret-matrix {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+.app-secret-canvas {
+  position: absolute;
+  inset: 0;
+}
+.app-secret-message {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  right: 24px;
+  z-index: 1;
+}
+.app-secret-line {
+  margin: 0 0 4px;
+  font-family: monospace;
+  font-size: 15px;
+  color: #00ff41;
+  text-shadow: 0 0 8px rgba(0, 255, 65, 0.8), 1px 1px 0 #000;
+}
+.app-secret-cursor { animation: secret-blink 1s steps(1) infinite; }
+@keyframes secret-blink { 50% { opacity: 0; } }

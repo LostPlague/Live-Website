@@ -45,11 +45,9 @@ export const ThreeExperience: React.FC = () => {
         });
         charIdx++;
 
-        // Play typewriter sound burst
-        const typeAudio = new Audio('/audio/type.mp3');
-        typeAudio.volume = 0.15;
-        typeAudio.play().catch(() => {});
-
+        // BIOS typing is silent (matches Henry) and — critically — this stops the
+        // BIOS queue's clicks from leaking in after Start, which kept playing for
+        // seconds. Only the HUD name/title/time typing plays the ccType click.
         setTimeout(typeNextChar, 25);
       } else {
         isTypingRef.current = false;
@@ -107,11 +105,9 @@ export const ThreeExperience: React.FC = () => {
   };
 
   const handleStartBoot = () => {
-    // Play startup sound once
-    const startupSound = new Audio('/audio/startup.mp3');
-    startupSound.volume = 0.4;
-    startupSound.play().catch(() => {});
-
+    // No startup chime here. Henry's intro audio is the typewriter clicks on the
+    // HUD name/title/time typing (see HUDOverlay → ccType), which begin right after
+    // boot and stop on their own when the typing finishes.
     setBooted(true);
     experienceInstanceRef.current?.camera.triggerTransition('idle', 2500);
     experienceInstanceRef.current?.audioManager.startAmbient();
@@ -151,6 +147,7 @@ export const ThreeExperience: React.FC = () => {
           isMuted={isMuted}
           onFreeCamToggle={handleFreeCamToggle}
           isOrbit={cameraState === 'orbit'}
+          visible={cameraState !== 'monitor'}
         />
       )}
 
@@ -182,7 +179,7 @@ export const ThreeExperience: React.FC = () => {
             </div>
           ) : (
             <button className="boot-button" onClick={handleStartBoot}>
-              [ Click to Start HeffernanOS ]
+              [ Click to Start TabariOS ]
             </button>
           )}
         </div>

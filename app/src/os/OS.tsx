@@ -1,9 +1,18 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Minesweeper } from './apps/Minesweeper';
+import ShowcaseExplorer from './apps/showcase/ShowcaseExplorer';
+import Browser from './apps/Browser';
+import Radio from './apps/Radio';
+import SecretFiles from './apps/SecretFiles';
 import { Window } from './components/Window';
 import './os.css';
 import windowsStartIcon from './assets/windowsStartIcon.png';
 import volumeOn from './assets/volumeOn.png';
+import computerBig from './assets/computerBig.png';
+import showcaseIcon from './assets/showcaseIcon.png';
+import ieIcon from './assets/ieIcon.png';
+import radioIcon from './assets/radioIcon.png';
+import lockIcon from './assets/lockIcon.png';
 
 const Colors = {
   white: '#FFFFFF',
@@ -13,13 +22,19 @@ const Colors = {
   darkGray: '#86898d',
 };
 
+interface OSWindow {
+  minimized: boolean;
+  zIndex: number;
+  name: string;
+  icon: string;        // emoji fallback (our apps)
+  iconImg?: string;    // png icon (Henry's apps)
+}
+
 export const OS: React.FC = () => {
   const [startMenuOpen, setStartMenuOpen] = useState(false);
-  const [windows, setWindows] = useState<{
-    [key: string]: { minimized: boolean; zIndex: number; name: string; icon: string }
-  }>({});
-  const [isSelected, setIsSelected] = useState(false);
-  const [doubleClickTimerActive, setDoubleClickTimerActive] = useState(false);
+  const [windows, setWindows] = useState<{ [key: string]: OSWindow }>({});
+  const [selectedShortcut, setSelectedShortcut] = useState<string | null>(null);
+  const [doubleClickTimer, setDoubleClickTimer] = useState<string | null>(null);
   const [time, setTime] = useState('');
   const lastClickInside = useRef(false);
 
@@ -43,7 +58,7 @@ export const OS: React.FC = () => {
       post('keyPress'); // existing audio cue
     };
     const onKeyUp = (e: KeyboardEvent) => post('keyup', { key: e.key });
-    
+
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mouseup', onMouseUp);
@@ -94,7 +109,7 @@ export const OS: React.FC = () => {
     const onClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       if (!target.closest('.os-shortcut')) {
-        setIsSelected(false);
+        setSelectedShortcut(null);
       }
     };
     window.addEventListener('mousedown', onClickOutside);
@@ -107,23 +122,37 @@ export const OS: React.FC = () => {
     return max;
   };
 
-  const openMinesweeper = () => {
-    setWindows(prev => ({
-      ...prev,
-      minesweeper: { minimized: false, zIndex: getHighestZIndex() + 1, name: 'Minesweeper', icon: '💣' }
-    }));
+  const openWindow = (key: string, name: string, icon: string, iconImg?: string) => {
+    setWindows(prev => {
+      let max = 0;
+      Object.keys(prev).forEach(k => { if (prev[k].zIndex > max) max = prev[k].zIndex; });
+      return {
+        ...prev,
+        [key]: { minimized: false, zIndex: max + 1, name, icon, iconImg },
+      };
+    });
   };
 
-  const closeMinesweeper = () => {
+  const closeWindow = (key: string) => {
     setWindows(prev => {
       const n = { ...prev };
-      delete n.minesweeper;
+      delete n[key];
       return n;
     });
   };
 
-  const minimizeMinesweeper = () => {
-    setWindows(prev => ({ ...prev, minesweeper: { ...prev.minesweeper, minimized: true } }));
+  const minimizeWindow = (key: string) => {
+    setWindows(prev => ({ ...prev, [key]: { ...prev[key], minimized: true } }));
+  };
+
+  const raiseWindow = (key: string) => {
+    setWindows(prev => {
+      if (!prev[key]) return prev;
+      let max = 0;
+      Object.keys(prev).forEach(k => { if (prev[k].zIndex > max) max = prev[k].zIndex; });
+      if (prev[key].zIndex === max) return prev;
+      return { ...prev, [key]: { ...prev[key], zIndex: max + 1 } };
+    });
   };
 
   const toggleMinimize = (key: string) => {
@@ -136,42 +165,143 @@ export const OS: React.FC = () => {
     setWindows(newWindows);
   };
 
-  const handleShortcutClick = () => {
-    if (doubleClickTimerActive) {
-      openMinesweeper();
-      setIsSelected(false);
-      setDoubleClickTimerActive(false);
+  const openShowcase = () => openWindow('showcase', 'My Showcase', '', showcaseIcon);
+  const openBrowser = () => openWindow('browser', 'Internet Explorer', '', ieIcon);
+  const openRadio = () => openWindow('radio', 'Hit Radio', '', radioIcon);
+  const openSecretFiles = () => openWindow('secret', 'Secret Files', '', lockIcon);
+  const openMinesweeper = () => openWindow('minesweeper', 'Minesweeper', '💣');
+
+  // Henry's Desktop auto-opens My Showcase on boot
+  useEffect(() => {
+    openShowcase();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Henry's double-click-to-open shortcut behavior
+  const handleShortcutClick = (key: string, open: () => void) => {
+    if (doubleClickTimer === key) {
+      open();
+      setSelectedShortcut(null);
+      setDoubleClickTimer(null);
       return;
     }
-    setIsSelected(true);
-    setDoubleClickTimerActive(true);
-    setTimeout(() => setDoubleClickTimerActive(false), 300);
+    setSelectedShortcut(key);
+    setDoubleClickTimer(key);
+    setTimeout(() => setDoubleClickTimer(null), 300);
   };
+
+  // Desktop shortcuts, stacked at Henry's `top: i * 104`
+  const shortcuts: {
+    key: string;
+    name: string;
+    iconImg?: string;
+    iconEmoji?: string;
+    open: () => void;
+  }[] = [
+    { key: 'showcase', name: 'My Showcase', iconImg: showcaseIcon, open: openShowcase },
+    { key: 'browser', name: 'Internet Explorer', iconImg: ieIcon, open: openBrowser },
+    { key: 'radio', name: 'Hit Radio', iconImg: radioIcon, open: openRadio },
+    { key: 'secret', name: 'Secret Files', iconImg: lockIcon, open: openSecretFiles },
+    { key: 'minesweeper', name: 'Minesweeper', iconEmoji: '💣', open: openMinesweeper },
+  ];
 
   return (
     <div className="os-desktop" style={{ backgroundColor: Colors.turquoise }}>
       <div className="os-shortcuts">
-        <div className="os-shortcut" onMouseDown={handleShortcutClick}>
-          <div className="os-shortcut-icon-container">
-            {isSelected && <div className="os-shortcut-icon-overlay os-shortcut-selected-overlay" />}
-            <div className="os-shortcut-icon">💣</div>
+        {shortcuts.map((sc, i) => (
+          <div key={sc.key} style={{ position: 'absolute', top: i * 104 }}>
+            <div className="os-shortcut" onMouseDown={() => handleShortcutClick(sc.key, sc.open)}>
+              <div className="os-shortcut-icon-container">
+                {selectedShortcut === sc.key && (
+                  <div className="os-shortcut-icon-overlay os-shortcut-selected-overlay" />
+                )}
+                {sc.iconImg ? (
+                  <img src={sc.iconImg} alt="" className="os-shortcut-icon-img" draggable={false} />
+                ) : (
+                  <div className="os-shortcut-icon">{sc.iconEmoji}</div>
+                )}
+              </div>
+              <div className={selectedShortcut === sc.key ? 'os-shortcut-label-selected' : ''}>
+                <p className="os-shortcut-label">{sc.name}</p>
+              </div>
+            </div>
           </div>
-          <div className={isSelected ? 'os-shortcut-label-selected' : ''}>
-            <p className="os-shortcut-label">Minesweeper</p>
-          </div>
-        </div>
+        ))}
       </div>
 
+      {windows.showcase && (
+        <div
+          style={{
+            zIndex: windows.showcase.zIndex,
+            ...(windows.showcase.minimized ? { pointerEvents: 'none' as const, opacity: 0 } : {}),
+          }}
+          onMouseDown={() => raiseWindow('showcase')}
+        >
+          <ShowcaseExplorer
+            onClose={() => closeWindow('showcase')}
+            onMinimize={() => minimizeWindow('showcase')}
+          />
+        </div>
+      )}
+
+      {windows.browser && (
+        <div
+          style={{
+            zIndex: windows.browser.zIndex,
+            ...(windows.browser.minimized ? { pointerEvents: 'none' as const, opacity: 0 } : {}),
+          }}
+          onMouseDown={() => raiseWindow('browser')}
+        >
+          <Browser
+            onClose={() => closeWindow('browser')}
+            onMinimize={() => minimizeWindow('browser')}
+          />
+        </div>
+      )}
+
+      {windows.radio && (
+        <div
+          style={{
+            zIndex: windows.radio.zIndex,
+            ...(windows.radio.minimized ? { pointerEvents: 'none' as const, opacity: 0 } : {}),
+          }}
+          onMouseDown={() => raiseWindow('radio')}
+        >
+          <Radio
+            onClose={() => closeWindow('radio')}
+            onMinimize={() => minimizeWindow('radio')}
+          />
+        </div>
+      )}
+
+      {windows.secret && (
+        <div
+          style={{
+            zIndex: windows.secret.zIndex,
+            ...(windows.secret.minimized ? { pointerEvents: 'none' as const, opacity: 0 } : {}),
+          }}
+          onMouseDown={() => raiseWindow('secret')}
+        >
+          <SecretFiles
+            onClose={() => closeWindow('secret')}
+            onMinimize={() => minimizeWindow('secret')}
+          />
+        </div>
+      )}
+
       {windows.minesweeper && (
-        <div style={{
-          zIndex: windows.minesweeper.zIndex,
-          ...(windows.minesweeper.minimized ? { pointerEvents: 'none' as const, opacity: 0 } : {})
-        }}>
+        <div
+          style={{
+            zIndex: windows.minesweeper.zIndex,
+            ...(windows.minesweeper.minimized ? { pointerEvents: 'none' as const, opacity: 0 } : {}),
+          }}
+          onMouseDown={() => raiseWindow('minesweeper')}
+        >
           <Window
             title="Minesweeper"
             icon="💣"
-            onClose={closeMinesweeper}
-            onMinimize={minimizeMinesweeper}
+            onClose={() => closeWindow('minesweeper')}
+            onMinimize={() => minimizeWindow('minesweeper')}
           >
             <Minesweeper />
           </Window>
@@ -182,13 +312,13 @@ export const OS: React.FC = () => {
         <div className="os-start-menu" onMouseDown={() => { lastClickInside.current = true; }}>
           <div className="os-start-menu-inner">
             <div className="os-start-sidebar">
-              <p className="os-start-sidebar-text">HeffernanOS</p>
+              <p className="os-start-sidebar-text">TabariOS</p>
             </div>
             <div className="os-start-content">
               <div className="os-start-spacer" />
               <div className="os-start-divider" />
               <div className="os-start-option" onMouseDown={handleShutdown}>
-                <div className="os-start-option-icon">🖥️</div>
+                <div className="os-start-option-icon"><img src={computerBig} alt="" className="os-start-option-icon-img" /></div>
                 <p className="os-start-option-text">Sh<u>u</u>t down...</p>
               </div>
             </div>
@@ -219,7 +349,11 @@ export const OS: React.FC = () => {
                     onMouseDown={() => toggleMinimize(key)}
                   >
                     <div className={`os-tab-inner ${isActive ? 'os-active-tab-inner' : ''}`}>
-                      <span className="os-tab-icon">{win.icon}</span>
+                      {win.iconImg ? (
+                        <img src={win.iconImg} alt="" className="os-tab-icon-img" />
+                      ) : (
+                        <span className="os-tab-icon">{win.icon}</span>
+                      )}
                       <p className="os-tab-text">{win.name}</p>
                     </div>
                   </div>

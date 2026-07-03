@@ -26,7 +26,7 @@ export class World {
     const textureLoader = new THREE.TextureLoader(loadingManager);
     const gltfLoader = new GLTFLoader(loadingManager);
 
-    this.experience.options.onBiosLine("HeffernanOS BIOS v1.09");
+    this.experience.options.onBiosLine("TabariOS BIOS v1.09");
     this.experience.options.onBiosLine("Initializing WebGL Core... Done.");
     this.experience.options.onBiosLine("Readying assets load queue...");
 
@@ -44,9 +44,9 @@ export class World {
     };
 
     const texturesToLoad = {
-      computer: '/textures/baked_computer.jpg',
+      computer: '/textures/baked_computer_tabari.png',  // Med's in-place label edit (bezel, keyboard, both back stickers → Mohamed/Tabari); diff vs Henry = 0.18, labels only
       environment: '/textures/baked_environment.jpg',
-      decor: '/textures/baked_decor_modified.jpg',
+      decor: '/textures/baked_decor_tabari.jpg',  // Med's credits-paper edit composited onto Henry's pristine decor atlas
     };
 
     const modelsToLoad = {
@@ -61,7 +61,7 @@ export class World {
           path,
           (texture) => {
             texture.flipY = false;
-            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.encoding = THREE.sRGBEncoding; // r135 API (engine pinned to Henry's three version)
             resolve(texture);
           },
           undefined,
@@ -146,16 +146,17 @@ export class World {
     this.videoElement1.play().catch((err) => console.error("Video 1 play error:", err));
 
     this.videoTexture1 = new THREE.VideoTexture(this.videoElement1);
-    this.videoTexture1.colorSpace = THREE.SRGBColorSpace;
+    // Henry leaves overlay glare textures LINEAR (no sRGB tag). sRGB-tagging
+    // decodes the texel darker, dimming the additive glow → screen too dark.
+    // Henry's verbatim material. Engine is pinned to his three r135, where
+    // AdditiveBlending = blendFunc(SRC_ALPHA, ONE) on color AND alpha: canvas
+    // alpha accumulates srcAlpha² per layer (≈0.27 total across the glare
+    // stack), so the browser shows the OS iframe at ~73% behind the glare.
+    // Do NOT upgrade three: 0.184 changed these alpha factors to (ONE, ONE),
+    // which crushes the screen (alpha 0.72 → iframe at ~28%).
     const videoMat1 = new THREE.MeshBasicMaterial({
       map: this.videoTexture1,
-      blending: THREE.CustomBlending,
-      blendEquation: THREE.AddEquation,
-      blendSrc: THREE.SrcAlphaFactor,
-      blendDst: THREE.OneFactor,
-      blendEquationAlpha: THREE.AddEquation,
-      blendSrcAlpha: THREE.ZeroFactor,
-      blendDstAlpha: THREE.OneFactor,
+      blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
       opacity: 0.5,
       transparent: true,
@@ -178,16 +179,11 @@ export class World {
     this.videoElement2.play().catch((err) => console.error("Video 2 play error:", err));
 
     this.videoTexture2 = new THREE.VideoTexture(this.videoElement2);
-    this.videoTexture2.colorSpace = THREE.SRGBColorSpace;
+    // Linear (no sRGB) to match Henry's additive glow brightness.
+    // Henry's verbatim material (see videoMat1 note re: r135 blending).
     const videoMat2 = new THREE.MeshBasicMaterial({
       map: this.videoTexture2,
-      blending: THREE.CustomBlending,
-      blendEquation: THREE.AddEquation,
-      blendSrc: THREE.SrcAlphaFactor,
-      blendDst: THREE.OneFactor,
-      blendEquationAlpha: THREE.AddEquation,
-      blendSrcAlpha: THREE.ZeroFactor,
-      blendDstAlpha: THREE.OneFactor,
+      blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
       opacity: 0.1,
       transparent: true,
@@ -201,16 +197,11 @@ export class World {
 
     // Smudges layer (z += 10)
     const smudgesTexture = textureLoader.load('/textures/smudges.jpg');
-    smudgesTexture.colorSpace = THREE.SRGBColorSpace;
+    // Linear (no sRGB) to match Henry's additive smudge brightness.
+    // Henry's verbatim material (see videoMat1 note re: r135 blending).
     const smudgesMat = new THREE.MeshBasicMaterial({
       map: smudgesTexture,
-      blending: THREE.CustomBlending,
-      blendEquation: THREE.AddEquation,
-      blendSrc: THREE.SrcAlphaFactor,
-      blendDst: THREE.OneFactor,
-      blendEquationAlpha: THREE.AddEquation,
-      blendSrcAlpha: THREE.ZeroFactor,
-      blendDstAlpha: THREE.OneFactor,
+      blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
       opacity: 0.12,
       transparent: true,
@@ -223,17 +214,20 @@ export class World {
 
     // Inner shadow layer (NormalBlending, opacity: 1) — Henry's monitorShadowTexture
     const shadowTexture = textureLoader.load('/textures/shadow-compressed.png');
-    shadowTexture.colorSpace = THREE.SRGBColorSpace;
+    // Linear (no sRGB) to match Henry's monitorShadowTexture handling.
     const shadowMat = new THREE.MeshBasicMaterial({
       map: shadowTexture,
       blending: THREE.NormalBlending,
       side: THREE.DoubleSide,
-      opacity: 0.5,
+      opacity: 1,   // Henry's monitorShadowTexture runs at full opacity (was 0.5)
       transparent: true,
       depthWrite: false,
     });
     this.shadowMesh = new THREE.Mesh(occlusionGeo, shadowMat);
-    this.shadowMesh.visible = false;
+    // Henry keeps the bezel inner-shadow visible (RGBA vignette: transparent
+    // center, opaque black edges) — it darkens the screen border to match his
+    // CRT look. Was disabled here, which left our screen too bright/washed.
+    this.shadowMesh.visible = true;
     this.shadowMesh.position.copy(monitorPos);
     this.shadowMesh.position.z += 20;   // Henry's offset: 5 * scaleFactor(4) = 20
     this.shadowMesh.rotation.copy(monitorRot);

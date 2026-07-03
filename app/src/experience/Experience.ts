@@ -34,7 +34,7 @@ export class Experience {
   overlayUniforms!: { u_time: { value: number } };
   overlayPlane!: THREE.Mesh;
 
-  clock!: THREE.Timer;
+  clock!: THREE.Clock;
   animId: number = 0;
 
   constructor(options: ExperienceOptions) {
@@ -66,7 +66,7 @@ export class Experience {
     });
     this.renderer.setSize(width, height);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.outputEncoding = THREE.sRGBEncoding; // Henry's Renderer.ts:28 verbatim (engine pinned to his three r135)
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.domElement.style.position = 'absolute';
     this.renderer.domElement.style.top = '0';
@@ -135,6 +135,9 @@ export class Experience {
     this.overlayRenderer.domElement.style.top = '0';
     this.overlayRenderer.domElement.style.left = '0';
     this.overlayRenderer.domElement.style.mixBlendMode = 'soft-light';
+    // Henry ships 0.12 (his Renderer.ts) — full-viewport CRT noise. Med has
+    // rejected that level twice ("blur/static over the whole website"), so this
+    // runs at 0.04 as a STANDING INTENTIONAL DEVIATION from Henry, per Med.
     this.overlayRenderer.domElement.style.opacity = '0.04';
     this.overlayRenderer.domElement.style.pointerEvents = 'none';
     if (this.options.overlayContainer) {
@@ -153,16 +156,18 @@ export class Experience {
     window.addEventListener('resize', this.handleResize);
 
     // Tick Render Loop
-    this.clock = new THREE.Timer();
+    this.clock = new THREE.Clock();
     this.tick();
   }
 
-  private tick = (timestamp?: number) => {
+  private tick = () => {
     this.animId = requestAnimationFrame(this.tick);
 
-    this.clock.update(timestamp);
-    const elapsed = this.clock.getElapsed() * 1000; // ms
+    // r135 Clock: getDelta() advances the clock — call it first, then read
+    // the accumulated elapsedTime (calling getElapsedTime() after getDelta()
+    // would re-advance and zero the next delta).
     const dt = this.clock.getDelta(); // seconds
+    const elapsed = this.clock.elapsedTime * 1000; // ms
 
     // Update camera behavior based on states
     this.camera.update(elapsed, dt);

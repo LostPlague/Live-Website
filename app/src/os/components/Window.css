@@ -1,90 +1,140 @@
-.os-window {
-  background-color: #c3c6ca;
-  font-family: 'MS Sans Serif', Tahoma, sans-serif;
-}
+/* ═══════════════════════════════════════════════════════════════
+   Window chrome — ported 1:1 from Henry's Window.tsx inline styles
+   + deployed main.c4751a8b.css (.showcase-header).
+   Henry runs content-box (no global border-box) — sizes below assume it.
+   ═══════════════════════════════════════════════════════════════ */
 
 .os-window-border-outer {
   border: 1px solid #000000;
   border-top-color: #c3c6ca;
   border-left-color: #c3c6ca;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .os-window-border-inner {
   border: 1px solid #86898d;
   border-top-color: #FFFFFF;
   border-left-color: #FFFFFF;
+  flex: 1;
   padding: 2px;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Title bar — Henry's exact: blue gradient, 20px tall */
+/* Henry's topBar: flat blue #0000a3 (no gradient), 20px, border-box */
 .os-window-titlebar {
-  background: linear-gradient(to right, #0000a3, #1084d0);
+  background-color: #0000a3;
   width: 100%;
   height: 20px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding-right: 2px;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
-.os-window-titlebar-text {
+.os-window-header {
+  flex: 1;
   display: flex;
+  flex-direction: row;
   align-items: center;
-  padding-left: 4px;
-  color: white;
-  font-weight: bold;
-  font-size: 11px;
+  overflow: hidden;
 }
 
+/* Henry: Icon size 16 with paddingLeft/Right 4 */
 .os-window-titlebar-icon {
-  margin-right: 4px;
-  font-size: 14px;
+  width: 16px;
+  height: 16px;
+  padding-left: 4px;
+  padding-right: 4px;
+  font-size: 16px;
   line-height: 1;
+  image-rendering: pixelated;
 }
 
-.os-window-titlebar-buttons {
+/* Deployed CSS: .showcase-header { color:#fff; font-size:15px; font-family:lores-15-bold-alt-oakland } */
+.showcase-header {
+  color: #fff;
+  font-size: 15px;
+  font-family: 'lores-15-bold-alt-oakland', 'MSSerif', sans-serif;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.os-window-topbuttons {
   display: flex;
   align-items: center;
-  gap: 1px;
 }
 
-.os-window-btn {
+/* Henry's Button.tsx: outer 16×14 content-box (1px black, top/left white),
+   inner 12×12 equivalent via flex fill (1px darkGray, top/left lightGray),
+   hover → inner background darkGray. */
+.os-window-btn-outer {
   width: 16px;
   height: 14px;
+  box-sizing: content-box;
+  border: 1px solid #000000;
+  border-top-color: #FFFFFF;
+  border-left-color: #FFFFFF;
   background: #c3c6ca;
-  border: 1px solid #FFFFFF;
-  border-bottom-color: #000000;
-  border-right-color: #000000;
-  font-family: 'MS Sans Serif', Tahoma, sans-serif;
-  font-size: 10px;
-  font-weight: bold;
-  color: #000000;
   cursor: pointer;
+  display: flex;
   padding: 0;
-  line-height: 1;
+}
+
+.os-window-btn-inner {
+  flex: 1;
+  border: 1px solid #86898d;
+  border-top-color: #c3c6ca;
+  border-left-color: #c3c6ca;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 
-.os-window-btn:active {
-  border: 1px solid #000000;
-  border-bottom-color: #FFFFFF;
-  border-right-color: #FFFFFF;
+.os-window-btn-outer:hover .os-window-btn-inner {
+  background-color: #86898d;
 }
 
-.os-window-btn-close {
-  font-size: 12px;
+.os-window-btn-img {
+  /* Med: icon art read too small at natural 12×10 — scale to fill the inner
+     button box (pixelated keeps the Win98 crunch). */
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
 }
 
-.os-window-content {
+/* Henry's contentOuter/contentInner/content */
+.os-window-content-outer {
   border: 1px solid #FFFFFF;
   border-top-color: #86898d;
   border-left-color: #86898d;
-  margin-top: 2px;
-  background: white;
-  padding: 2px;
+  flex-grow: 1;
+  margin-top: 8px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.os-window-content-inner {
+  border: 1px solid #c3c6ca;
+  border-top-color: #000000;
+  border-left-color: #000000;
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.os-window-content {
+  flex: 1;
+  position: relative;
+  overflow-x: hidden;
+  background-color: #FFFFFF;
 }
 
 .os-window-content[data-maximized="true"] {
@@ -97,4 +147,54 @@
   transform: scale(2.5);
   transform-origin: center center;
   image-rendering: pixelated;  /* keep pixel-art crisp when scaling */
+}
+
+/* Henry's bottomBar: 20px, 4 inset panels — text (flex 5/7), two 16px
+   spacers (marginLeft 2), resize grip container (flex 2/7). */
+.os-window-bottombar {
+  flex-shrink: 0;
+  width: 100%;
+  height: 20px;
+  display: flex;
+  flex-direction: row;
+}
+
+.os-inset-border {
+  border: 1px solid #FFFFFF;
+  border-top-color: #86898d;
+  border-left-color: #86898d;
+  padding: 2px;
+  display: flex;
+}
+
+.os-bottom-left {
+  flex: 5;
+  align-items: center;
+  overflow: hidden;
+}
+
+.os-bottom-left-text {
+  font-size: 12px;
+  margin: 0 0 0 4px;
+  font-family: 'MSSerif', 'MS Sans Serif', sans-serif;
+  color: #000000;
+  white-space: nowrap;
+}
+
+.os-bottom-spacer {
+  width: 16px;
+  margin-left: 2px;
+  flex-shrink: 0;
+}
+
+.os-bottom-resize {
+  flex: 2;
+  justify-content: flex-end;
+  padding: 0;
+  margin-left: 2px;
+}
+
+.os-bottom-resize-inner {
+  display: flex;
+  align-items: flex-end;
 }

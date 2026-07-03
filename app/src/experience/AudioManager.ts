@@ -51,6 +51,7 @@ export class AudioManager {
       key4: '/audio/keyboard/key_4.mp3',
       key5: '/audio/keyboard/key_5.mp3',
       key6: '/audio/keyboard/key_6.mp3',
+      ccType: '/audio/type.mp3',
     };
 
     const loadAudioPromise = (key: string, path: string): Promise<AudioBuffer> => {
@@ -134,6 +135,8 @@ export class AudioManager {
       this.playMouseUp();
     } else if (e.data?.type === 'keyPress') {
       this.playKeyRandom();
+    } else if (e.data?.type === 'ccType') {
+      this.playCcType();
     }
   };
 
@@ -167,6 +170,26 @@ export class AudioManager {
         keySound.play();
       }
     }
+  }
+
+  // Henry's InfoOverlay typewriter tick. Extracted verbatim from his bundle:
+  //   playAudio("ccType", { volume: 0.1, randDetuneScale: 0, pitch: 20 })
+  // randDetuneScale 0 → no random detune; pitch 20 → setDetune(100 * 20) = 2000
+  // cents. Played on the listener's WebAudio context — the same path Howler uses,
+  // so it's audible (unlike HTMLAudio.playbackRate, which muted the short clip).
+  public playCcType() {
+    const buffer = this.buffers['ccType'];
+    if (!buffer) return;
+    const ctx = this.listener.context;
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.detune.value = 2000;            // Henry: pitch 20 → setDetune(100 * 20)
+    const gain = ctx.createGain();
+    gain.gain.value = 0.1;              // Henry: volume 0.1
+    src.connect(gain).connect(this.listener.getInput());
+    src.onended = () => { src.disconnect(); gain.disconnect(); };
+    src.start();
   }
 
   public startAmbient() {
