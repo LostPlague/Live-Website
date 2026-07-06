@@ -6,17 +6,18 @@ import { Experience } from './Experience';
 // RoomMatrix — turns the ENTIRE 3D room into the Matrix.
 //
 // Triggered by the OS iframe posting {type:'matrixEnter'} / {type:'matrixExit'}
-// (same window-message bridge the audio uses). Three layers, all reversible:
+// (same window-message bridge the audio uses). Two reversible layers:
 //   1. Surface reskin: every baked room material gets a shader overlay injected
-//      via onBeforeCompile behind a uProgress uniform. At progress 0 the mesh
-//      renders IDENTICALLY to before (the matrix branch is skipped), so the
-//      current look is 100% safe until triggered — no snapshot/restore needed.
-//      World-space downward rain via triplanar so code falls "down" on every
-//      surface (walls, ceiling, desk), from a code-generated katakana atlas.
-//   2. Volumetric air-rain: a few billboarded additive planes so code falls
-//      through the space around the desk. Green exponential fog for depth.
-//   3. Camera pull-back: a per-frame visual offset (re-applied fresh each frame,
-//      never accumulates) so you watch the room flood. Reverts fully at 0.
+//      via onBeforeCompile behind a uProgress uniform. At progress 0 the matrix
+//      branch is skipped, so the mesh renders IDENTICALLY to before — the
+//      current look is 100% safe until triggered, nothing to snapshot/restore.
+//      World-space triplanar rain (normals from screen-space derivatives, so no
+//      dependency on a normal attribute) makes code fall "down" on every
+//      surface — walls, ceiling AND the desk — from a code-generated katakana
+//      glyph atlas.
+//   2. Green exponential fog + a camera pull-back (a per-frame visual offset,
+//      re-applied fresh each frame so it never accumulates) so you watch the
+//      room flood, then fully reverts at 0.
 //
 // Nothing here touches the three r135 pin, the render pipeline, or the CRT
 // compositing. Everything defaults to off.
@@ -64,7 +65,7 @@ vec3 matrixSurface(vec3 wp){
   n /= max(n.x + n.y + n.z, 0.001);
   vec3 rx = rainStream(wp.zy);  // X-facing walls: across = Z, down = Y
   vec3 rz = rainStream(wp.xy);  // Z-facing walls: across = X, down = Y
-  vec3 ry = rainStream(wp.xz);  // floor / ceiling: across = X, "down" = Z
+  vec3 ry = rainStream(wp.xz);  // floor / desk / ceiling: across = X, "down" = Z
   return rx * n.x + rz * n.z + ry * n.y;
 }
 `;
@@ -72,33 +73,8 @@ vec3 matrixSurface(vec3 wp){
 const FRAG_MIX = /* glsl */ `
 if (uProgress > 0.001) {
   vec3 mtx = matrixSurface(vWorldPosM);
-  vec3 darkened = gl_FragColor.rgb * mix(1.0, 0.05, uProgress); // room powers down
+  vec3 darkened = gl_FragColor.rgb * mix(1.0, 0.07, uProgress); // room powers down
   gl_FragColor.rgb = darkened + mtx * uProgress;                // code streams over it
-}
-`;
-
-const RAIN_PLANE_FRAG = /* glsl */ `
-uniform float uTime;
-uniform float uOpacity;
-varying vec2 vUv;
-float h(float x){ return fract(sin(x * 127.1) * 43758.5453); }
-void main(){
-  float cols = 46.0;
-  float c = floor(vUv.x * cols);
-  float sp = 0.25 + h(c) * 0.8;
-  float y = fract(vUv.y - uTime * sp * 0.12 + h(c * 3.3));
-  float b = pow(1.0 - y, 6.0);                       // bright streak head, long fade
-  float a = b * uOpacity * (0.35 + 0.65 * h(c * 5.1));
-  if (a < 0.003) discard;
-  gl_FragColor = vec4(vec3(0.2, 1.0, 0.35) * b, a);
-}
-`;
-
-const RAIN_PLANE_VERT = /* glsl */ `
-varying vec2 vUv;
-void main(){
-  vUv = uv;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }
 `;
 
@@ -115,17 +91,15 @@ export class RoomMatrix {
   };
   private atlas: THREE.Texture;
   private injected = new WeakSet<THREE.Material>();
-  private rainPlanes: THREE.Mesh[] = [];
-  private planeUniforms: { uTime: { value: number }; uOpacity: { value: number } };
 
   private active = false;
   private camPull = 0;        // 0..1, gsap-driven
   private fogDensity = 0;     // 0..target, gsap-driven
 
-  // tuning knobs (world units) — easy to adjust to taste
-  public pullDist = 4200;
-  public pullUp = 900;
-  private fogTarget = 0.000085;
+  // tuning knobs — easy to adjust to taste
+  public pullDist = 2800;     // how far the camera dollies back (world units)
+  public pullUp = 600;        // how much it rises while pulling back
+  private fogTarget = 0.00007;
 
   constructor(experience: Experience) {
     this.experience = experience;
@@ -137,8 +111,6 @@ export class RoomMatrix {
       uCell: { value: 70 },
       uFallSpeed: { value: 5.0 },
     };
-    this.planeUniforms = { uTime: { value: 0 }, uOpacity: { value: 0 } };
-    this.buildRainPlanes();
 
     window.addEventListener('message', this.onMessage);
     window.addEventListener('keydown', this.onKeyDown);
@@ -155,7 +127,6 @@ export class RoomMatrix {
       camPull: this.camPull,
       fogDensity: this.fogDensity,
       hasFog: !!this.experience.scene.fog,
-      rainPlanesVisible: this.rainPlanes.filter((p) => p.visible).length,
     };
   }
 
@@ -220,33 +191,6 @@ export class RoomMatrix {
     return tex;
   }
 
-  private buildRainPlanes() {
-    const mat = new THREE.ShaderMaterial({
-      vertexShader: RAIN_PLANE_VERT,
-      fragmentShader: RAIN_PLANE_FRAG,
-      uniforms: this.planeUniforms,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    });
-    // a few large sheets at different depths around the desk volume
-    const specs = [
-      { w: 9000, h: 6000, pos: new THREE.Vector3(0, 1200, -1500) },
-      { w: 7000, h: 5000, pos: new THREE.Vector3(-2600, 1000, 900) },
-      { w: 7000, h: 5000, pos: new THREE.Vector3(2600, 1000, 900) },
-      { w: 8000, h: 5000, pos: new THREE.Vector3(0, 1500, 2600) },
-    ];
-    for (const s of specs) {
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(s.w, s.h), mat);
-      mesh.position.copy(s.pos);
-      mesh.visible = false;
-      mesh.renderOrder = 5;
-      this.experience.scene.add(mesh);
-      this.rainPlanes.push(mesh);
-    }
-  }
-
   private onMessage = (e: MessageEvent) => {
     if (!e.data || !e.data.type) return;
     if (e.data.type === 'matrixEnter') this.enter();
@@ -254,8 +198,8 @@ export class RoomMatrix {
   };
 
   private onKeyDown = (e: KeyboardEvent) => {
-    // Escape is a guaranteed way out even when the camera is pulled back and the
-    // on-screen button is small — tell the OS to dismiss, which posts matrixExit.
+    // Escape is a guaranteed way out even when the camera is pulled back — tell
+    // the OS to dismiss, which posts matrixExit back to restore the room.
     if (e.key === 'Escape' && this.active) {
       this.experience.monitorScreen?.iframeEl?.contentWindow?.postMessage(
         { type: 'matrixDismiss' },
@@ -267,7 +211,6 @@ export class RoomMatrix {
   public enter() {
     if (this.active) return;
     this.active = true;
-    this.rainPlanes.forEach((p) => (p.visible = true));
     this.experience.scene.fog = this.experience.scene.fog || new THREE.FogExp2(0x001a05, 0);
 
     gsap.killTweensOf(this.uniforms.uProgress);
@@ -289,7 +232,6 @@ export class RoomMatrix {
       ease: 'power2.in',
       onComplete: () => {
         this.active = false;
-        this.rainPlanes.forEach((p) => (p.visible = false));
         this.experience.scene.fog = null;
       },
     });
@@ -304,9 +246,6 @@ export class RoomMatrix {
       return; // fully idle — no per-frame cost
     }
 
-    this.planeUniforms.uTime.value = t;
-    this.planeUniforms.uOpacity.value = this.uniforms.uProgress.value * 0.9;
-
     if (this.experience.scene.fog instanceof THREE.FogExp2) {
       this.experience.scene.fog.density = this.fogDensity;
     }
@@ -320,12 +259,6 @@ export class RoomMatrix {
       cam.position.y += this.pullUp * this.camPull;
       cam.lookAt(tgt);
     }
-
-    // billboard the air-rain sheets toward the (offset) camera
-    if (this.rainPlanes.length && this.rainPlanes[0].visible) {
-      const q = this.experience.camera.instance.quaternion;
-      for (const p of this.rainPlanes) p.quaternion.copy(q);
-    }
   }
 
   public destroy() {
@@ -333,12 +266,6 @@ export class RoomMatrix {
     window.removeEventListener('keydown', this.onKeyDown);
     gsap.killTweensOf(this.uniforms.uProgress);
     gsap.killTweensOf(this);
-    for (const p of this.rainPlanes) {
-      this.experience.scene.remove(p);
-      p.geometry.dispose();
-      (p.material as THREE.Material).dispose();
-    }
-    this.rainPlanes = [];
     this.atlas.dispose();
     this.experience.scene.fog = null;
   }
