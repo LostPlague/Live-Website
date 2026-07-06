@@ -13,7 +13,7 @@ export class MonitorScreen {
   experience: Experience;
   cssObject!: CSS3DObject;
   occlusionMesh!: THREE.Mesh;
-  private iframeEl!: HTMLIFrameElement;
+  public iframeEl!: HTMLIFrameElement;
   private dimmingPlane?: THREE.Mesh;
   private monitorPos = new THREE.Vector3(0, 950, 255);
   private monitorRot = new THREE.Euler(-3 * THREE.MathUtils.DEG2RAD, 0, 0);

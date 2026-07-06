@@ -74,6 +74,18 @@ export const OS: React.FC = () => {
     if (matrixTimer.current) clearTimeout(matrixTimer.current);
   }, []);
 
+  // Escape pressed on the 3D room side posts 'matrixDismiss' back to the OS —
+  // dismiss the takeover (a ref keeps the handler pointed at the latest closure).
+  const exitMatrixRef = useRef(exitMatrix);
+  exitMatrixRef.current = exitMatrix;
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      if (e.data?.type === 'matrixDismiss') exitMatrixRef.current();
+    };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
   // Bridge: forward window events to parent shell (so MonitorScreen's
   // iframe.onload listener gets them, fixing the hover-stale-state bug)
   useEffect(() => {

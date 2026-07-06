@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Experience } from './Experience';
+import { RoomMatrix } from './RoomMatrix';
 
 export class World {
   experience: Experience;
   loadedTextures: Record<string, THREE.Texture> = {};
+  roomMatrix!: RoomMatrix;
   
   smudgesMesh?: THREE.Mesh;
   shadowMesh?: THREE.Mesh;
@@ -25,6 +27,10 @@ export class World {
     const loadingManager = new THREE.LoadingManager();
     const textureLoader = new THREE.TextureLoader(loadingManager);
     const gltfLoader = new GLTFLoader(loadingManager);
+
+    // Matrix room-takeover controller (idle until the OS posts 'matrixEnter').
+    // Created before geometry loads so each room mesh can be registered on load.
+    this.roomMatrix = new RoomMatrix(this.experience);
 
     this.experience.options.onBiosLine("TabariOS BIOS v1.09");
     this.experience.options.onBiosLine("Initializing WebGL Core... Done.");
@@ -91,6 +97,7 @@ export class World {
               child.material = new THREE.MeshBasicMaterial({
                 map: this.loadedTextures.environment,
               });
+              this.roomMatrix.registerMesh(child);
             }
           });
           this.experience.scene.add(model);
@@ -105,6 +112,7 @@ export class World {
               child.material = new THREE.MeshBasicMaterial({
                 map: this.loadedTextures.decor,
               });
+              this.roomMatrix.registerMesh(child);
             }
           });
           this.experience.scene.add(model);
@@ -119,6 +127,7 @@ export class World {
               child.material = new THREE.MeshBasicMaterial({
                 map: this.loadedTextures.computer,
               });
+              this.roomMatrix.registerMesh(child);
             }
           });
           this.experience.scene.add(model);
@@ -248,6 +257,8 @@ export class World {
   }
 
   public destroy() {
+    this.roomMatrix?.destroy();
+
     if (this.shadowMesh) {
       this.experience.scene.remove(this.shadowMesh);
       if (this.shadowMesh.material instanceof THREE.Material) {

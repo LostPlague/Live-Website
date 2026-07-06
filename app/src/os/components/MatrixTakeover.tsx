@@ -299,6 +299,24 @@ const MatrixTakeover: React.FC<MatrixTakeoverProps> = ({ phase, subjectRef, onRe
     return startGlitchStatic();
   }, [phase]);
 
+  // ── bridge to the 3D room shell ──
+  // Tell the parent (the Three.js room) to flood with code / restore. On the
+  // standalone /os route window.parent === window and nothing listens, so this
+  // is a harmless no-op.
+  useEffect(() => {
+    const post = (type: string) => { try { window.parent.postMessage({ type }, '*'); } catch {} };
+    if (phase === 'matrix') post('matrixEnter');
+    else if (phase === 'exit') post('matrixExit');
+  }, [phase]);
+
+  // Escape is a guaranteed way out while the matrix screen owns everything.
+  useEffect(() => {
+    if (phase !== 'matrix') return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onReenter(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [phase, onReenter]);
+
   return (
     <div className="mtx-overlay">
       <svg className="mtx-defs" aria-hidden="true" focusable="false">

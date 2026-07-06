@@ -174,6 +174,10 @@ export class Experience {
     this.monitorScreen.update(this.camera.instance.position);
     this.coffeeSteam.update(elapsed);
 
+    // Matrix room takeover — advances rain time + applies the camera pull-back
+    // offset (fresh each frame) just before render. No-op while idle.
+    this.world?.roomMatrix?.update(elapsed);
+
     // Render WebGL & CSS3D
     this.renderer.render(this.scene, this.camera.instance);
     this.cssRenderer.render(this.cssScene, this.camera.instance);
