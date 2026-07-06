@@ -24,6 +24,11 @@ export class MonitorScreen {
   private mouseClickInProgress = false;
   private shouldLeaveMonitor = false;
 
+  /** true while the mouse is over the CRT screen (read by RoomMatrix) */
+  public get isMouseOnScreen(): boolean {
+    return this.inComputer;
+  }
+
   constructor(experience: Experience) {
     this.experience = experience;
     this.initializeScreenEvents();
