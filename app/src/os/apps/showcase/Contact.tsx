@@ -1,6 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import twitterIcon from '../../assets/showcase/contact-twitter.png';
-import ghIcon from '../../assets/showcase/contact-gh.png';
 import inIcon from '../../assets/showcase/contact-in.png';
 import ResumeDownload from './ResumeDownload';
 import type { StyleSheetCSS } from './types';
@@ -121,13 +119,11 @@ const Contact: React.FC<ContactProps> = () => {
       <div style={styles.header}>
         <h1>Contact</h1>
         <div style={styles.socials}>
-          {/* GitHub/Twitter still PLACEHOLDERS — waiting on Med's URLs */}
-          <SocialBox icon={ghIcon} link={'#'} />
+          {/* LinkedIn only for now (GitHub/Twitter removed per Med) */}
           <SocialBox
             icon={inIcon}
             link={'https://www.linkedin.com/in/mohamed-tabari/'}
           />
-          <SocialBox icon={twitterIcon} link={'#'} />
         </div>
       </div>
       <div className="text-block">

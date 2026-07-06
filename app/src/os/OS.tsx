@@ -5,6 +5,7 @@ import Browser from './apps/Browser';
 import Radio from './apps/Radio';
 import SecretFiles from './apps/SecretFiles';
 import { Window } from './components/Window';
+import MatrixTakeover, { type MatrixPhase } from './components/MatrixTakeover';
 import './os.css';
 import windowsStartIcon from './assets/windowsStartIcon.png';
 import volumeOn from './assets/volumeOn.png';
@@ -37,6 +38,41 @@ export const OS: React.FC = () => {
   const [doubleClickTimer, setDoubleClickTimer] = useState<string | null>(null);
   const [time, setTime] = useState('');
   const lastClickInside = useRef(false);
+
+  // Matrix takeover: 'idle' → 'glitch' (desktop shreds) → 'matrix' (rain owns
+  // the screen) → 'exit' (CRT-off + glitch back) → 'idle'. The OS tree stays
+  // mounted throughout, so every open window survives the trip.
+  const [matrixPhase, setMatrixPhase] = useState<'idle' | MatrixPhase>('idle');
+  const [secretVanished, setSecretVanished] = useState(false);
+  const matrixTimer = useRef<number | null>(null);
+  const matrixSubjectRef = useRef<HTMLDivElement>(null);
+
+  const enterMatrix = () => {
+    if (matrixTimer.current) clearTimeout(matrixTimer.current);
+    setMatrixPhase('glitch');
+    matrixTimer.current = window.setTimeout(() => setMatrixPhase('matrix'), 2300);
+  };
+
+  const exitMatrix = () => {
+    if (matrixTimer.current) clearTimeout(matrixTimer.current);
+    setMatrixPhase('exit');
+    matrixTimer.current = window.setTimeout(() => {
+      setMatrixPhase('idle');
+      // The Matrix consumes Secret Files on the way back: close its window and
+      // remove the desktop app entirely. It's a one-shot — a page refresh
+      // restores it for another run.
+      setSecretVanished(true);
+      setWindows(prev => {
+        const n = { ...prev };
+        delete n.secret;
+        return n;
+      });
+    }, 950);
+  };
+
+  useEffect(() => () => {
+    if (matrixTimer.current) clearTimeout(matrixTimer.current);
+  }, []);
 
   // Bridge: forward window events to parent shell (so MonitorScreen's
   // iframe.onload listener gets them, fixing the hover-stale-state bug)
@@ -201,14 +237,17 @@ export const OS: React.FC = () => {
     { key: 'showcase', name: 'My Showcase', iconImg: showcaseIcon, open: openShowcase },
     { key: 'browser', name: 'Internet Explorer', iconImg: ieIcon, open: openBrowser },
     { key: 'radio', name: 'Hit Radio', iconImg: radioIcon, open: openRadio },
-    { key: 'secret', name: 'Secret Files', iconImg: lockIcon, open: openSecretFiles },
     { key: 'minesweeper', name: 'Minesweeper', iconEmoji: '💣', open: openMinesweeper },
+    { key: 'secret', name: 'Secret Files', iconImg: lockIcon, open: openSecretFiles },
   ];
 
   return (
     <div className="os-desktop" style={{ backgroundColor: Colors.turquoise }}>
+      {/* Everything the user normally sees. During a Matrix takeover this whole
+          subtree is what the glitch filter shreds — the real, live desktop. */}
+      <div className="os-subject" ref={matrixSubjectRef}>
       <div className="os-shortcuts">
-        {shortcuts.map((sc, i) => (
+        {shortcuts.filter(sc => !(sc.key === 'secret' && secretVanished)).map((sc, i) => (
           <div key={sc.key} style={{ position: 'absolute', top: i * 104 }}>
             <div className="os-shortcut" onMouseDown={() => handleShortcutClick(sc.key, sc.open)}>
               <div className="os-shortcut-icon-container">
@@ -285,6 +324,7 @@ export const OS: React.FC = () => {
           <SecretFiles
             onClose={() => closeWindow('secret')}
             onMinimize={() => minimizeWindow('secret')}
+            onEnterMatrix={enterMatrix}
           />
         </div>
       )}
@@ -367,6 +407,15 @@ export const OS: React.FC = () => {
           </div>
         </div>
       </div>
+      </div>{/* /os-subject */}
+
+      {matrixPhase !== 'idle' && (
+        <MatrixTakeover
+          phase={matrixPhase}
+          subjectRef={matrixSubjectRef}
+          onReenter={exitMatrix}
+        />
+      )}
     </div>
   );
 };

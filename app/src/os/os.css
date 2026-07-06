@@ -787,3 +787,196 @@ html, body, #root {
 }
 .app-secret-cursor { animation: secret-blink 1s steps(1) infinite; }
 @keyframes secret-blink { 50% { opacity: 0; } }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MATRIX TAKEOVER
+   The whole OS lives inside .os-subject; the takeover shreds THAT (real, live
+   pixels) with an SVG displacement filter, then covers the screen in rain.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Fills .os-desktop exactly so it stays the positioning context for the
+   shortcuts / windows / toolbar. GPU-isolated so filtering it is cheap. */
+.os-subject {
+  position: absolute;
+  inset: 0;
+  transform: translateZ(0);
+}
+
+.mtx-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2000000;           /* above toolbar (1e5) and start menu (1e5+1) */
+  pointer-events: auto;       /* eat clicks on the shredding desktop */
+  overflow: hidden;
+}
+
+/* zero-footprint host for the SVG filter defs */
+.mtx-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+/* full-screen greyscale static, screened over the shredded desktop */
+.mtx-noise {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  mix-blend-mode: screen;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+/* horizontal tear bars flung around during spikes (positioned via JS) */
+.mtx-tearbars { position: absolute; inset: 0; pointer-events: none; }
+.mtx-tearbar {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 3%;
+  opacity: 0;
+  mix-blend-mode: screen;
+}
+.mtx-tearbar--green { background: #00ff41; }
+.mtx-tearbar--white { background: #ffffff; }
+.mtx-tearbar--black { background: #000000; mix-blend-mode: multiply; }
+
+.mtx-flashtext {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  margin: 0;
+  transform: translateY(-50%);
+  text-align: center;
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
+  font-size: 40px;
+  letter-spacing: 6px;
+  color: #00ff41;
+  text-shadow: 3px 0 #ff0033, -3px 0 #00b3ff, 0 0 18px rgba(0, 255, 65, 0.9);
+  pointer-events: none;
+  animation: mtx-flash-jitter 0.09s steps(2) infinite;
+}
+@keyframes mtx-flash-jitter {
+  0%   { transform: translate(-3px, calc(-50% - 1px)); }
+  100% { transform: translate(3px, calc(-50% + 1px)); }
+}
+
+/* ── the Matrix screen itself ── */
+.mtx-screen {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  overflow: hidden;
+  transform-origin: center center;
+}
+.mtx-screen--off {
+  animation: mtx-crt-off 0.7s cubic-bezier(0.6, 0, 0.9, 0.2) forwards;
+}
+@keyframes mtx-crt-off {
+  0%   { transform: scaleY(1) scaleX(1);      filter: brightness(1); opacity: 1; }
+  55%  { transform: scaleY(0.008) scaleX(1);  filter: brightness(4); opacity: 1; }
+  80%  { transform: scaleY(0.008) scaleX(0.5);filter: brightness(6); opacity: 1; }
+  100% { transform: scaleY(0.008) scaleX(0);  filter: brightness(8); opacity: 0; }
+}
+
+.mtx-rain {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.mtx-message {
+  position: absolute;
+  top: 6%;
+  left: 7%;
+  right: 7%;
+  z-index: 2;
+  pointer-events: none;
+}
+.mtx-line {
+  margin: 0 0 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 18px;
+  line-height: 1.35;
+  color: #00ff41;
+  text-shadow: 0 0 9px rgba(0, 255, 65, 0.85), 1px 1px 0 #000;
+}
+.mtx-cursor { animation: secret-blink 1s steps(1) infinite; }
+
+/* faint CRT scanlines over the whole matrix screen */
+.mtx-scanlines {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.28) 3px,
+    rgba(0, 0, 0, 0.28) 4px
+  );
+  animation: mtx-scan-drift 8s linear infinite;
+}
+@keyframes mtx-scan-drift { to { background-position: 0 100px; } }
+
+/* the way out — pinned bottom-center, blinking terminal chip */
+.mtx-reenter {
+  position: absolute;
+  left: 50%;
+  bottom: 34px;
+  transform: translateX(-50%);
+  z-index: 4;
+  padding: 12px 26px;
+  background: rgba(0, 20, 0, 0.85);
+  border: 1px solid #00ff41;
+  color: #00ff41;
+  font-family: 'Courier New', monospace;
+  font-size: 15px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  text-shadow: 0 0 8px rgba(0, 255, 65, 0.9);
+  box-shadow: 0 0 14px rgba(0, 255, 65, 0.35), inset 0 0 10px rgba(0, 255, 65, 0.15);
+  transition: opacity 0.6s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.mtx-reenter--on {
+  opacity: 1;
+  pointer-events: auto;
+  animation: mtx-reenter-pulse 1.4s ease-in-out infinite;
+}
+.mtx-reenter--on:hover {
+  background: #00ff41;
+  color: #000;
+  box-shadow: 0 0 26px rgba(0, 255, 65, 0.9);
+}
+@keyframes mtx-reenter-pulse {
+  0%, 100% { box-shadow: 0 0 14px rgba(0, 255, 65, 0.35), inset 0 0 10px rgba(0, 255, 65, 0.15); }
+  50%      { box-shadow: 0 0 24px rgba(0, 255, 65, 0.75), inset 0 0 14px rgba(0, 255, 65, 0.3); }
+}
+
+/* glitchy stutter on the button label — brackets frame it as a terminal
+   action; the text randomly ghosts sideways with a red/cyan chromatic split
+   (the "clhhhick" feel) via animated text-shadow. */
+.mtx-glitch-text { display: inline-block; }
+.mtx-glitch-text::before { content: '[ '; }
+.mtx-glitch-text::after  { content: ' ]'; }
+.mtx-reenter--on .mtx-glitch-text {
+  animation: mtx-text-flicker 2.8s steps(1) infinite;
+}
+@keyframes mtx-text-flicker {
+  0%, 90%, 100% { opacity: 1;    transform: translateX(0);    text-shadow: 0 0 8px rgba(0,255,65,0.9); }
+  91% { opacity: 0.75; transform: translateX(-1px); text-shadow: -2px 0 #ff0033,  2px 0 #00b3ff, 0 0 8px rgba(0,255,65,0.9); }
+  93% { opacity: 1;    transform: translateX(2px);  text-shadow:  2px 0 #ff0033, -2px 0 #00b3ff, 0 0 8px rgba(0,255,65,0.9); }
+  95% { opacity: 0.85; transform: translateX(-2px); text-shadow: -3px 0 #ff0033,  1px 0 #00b3ff, 0 0 8px rgba(0,255,65,0.9); }
+  97% { opacity: 1;    transform: translateX(1px);  text-shadow:  1px 0 #ff0033, -1px 0 #00b3ff, 0 0 8px rgba(0,255,65,0.9); }
+}
