@@ -43,24 +43,31 @@ export const OS: React.FC = () => {
   // the screen) → 'exit' (CRT-off + glitch back) → 'idle'. The OS tree stays
   // mounted throughout, so every open window survives the trip.
   const [matrixPhase, setMatrixPhase] = useState<'idle' | MatrixPhase>('idle');
+  const [matrixLevel, setMatrixLevel] = useState<2 | 3>(2);
   const [secretVanished, setSecretVanished] = useState(false);
   const matrixTimer = useRef<number | null>(null);
   const matrixSubjectRef = useRef<HTMLDivElement>(null);
 
   const enterMatrix = () => {
     if (matrixTimer.current) clearTimeout(matrixTimer.current);
+    setMatrixLevel(2);
     setMatrixPhase('glitch');
     matrixTimer.current = window.setTimeout(() => setMatrixPhase('matrix'), 2300);
   };
+
+  // final answer correct → stage 3: the room outside falls too
+  const ascendToFinale = () => setMatrixLevel(3);
 
   const exitMatrix = () => {
     if (matrixTimer.current) clearTimeout(matrixTimer.current);
     setMatrixPhase('exit');
     matrixTimer.current = window.setTimeout(() => {
       setMatrixPhase('idle');
+      setMatrixLevel(2);
       // The Matrix consumes Secret Files on the way back: close its window and
       // remove the desktop app entirely. It's a one-shot — a page refresh
-      // restores it for another run.
+      // restores it for another run. (Stage-1 give-up doesn't come through
+      // here — that just closes the window and the app survives.)
       setSecretVanished(true);
       setWindows(prev => {
         const n = { ...prev };
@@ -424,8 +431,10 @@ export const OS: React.FC = () => {
       {matrixPhase !== 'idle' && (
         <MatrixTakeover
           phase={matrixPhase}
+          level={matrixLevel}
           subjectRef={matrixSubjectRef}
           onReenter={exitMatrix}
+          onFinalUnlock={ascendToFinale}
         />
       )}
     </div>

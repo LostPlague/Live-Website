@@ -295,6 +295,213 @@ export function startMatrixMusic(): () => void {
   };
 }
 
+/** Two quick ascending blips — small "clearance granted" cue for stage 1. */
+export function playAccessChirp(): void {
+  const c = ensureCtx();
+  const t = c.currentTime;
+  [520, 780].forEach((f, i) => {
+    const o = c.createOscillator();
+    o.type = 'square';
+    o.frequency.value = f;
+    const g = c.createGain();
+    const st = t + i * 0.09;
+    g.gain.setValueAtTime(0.0001, st);
+    g.gain.exponentialRampToValueAtTime(0.045, st + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, st + 0.08);
+    o.connect(g).connect(c.destination);
+    o.start(st);
+    o.stop(st + 0.1);
+    o.onended = () => { o.disconnect(); g.disconnect(); };
+  });
+}
+
+/**
+ * Stage-3 transition: a 2s noise riser sweeping upward, then an impact —
+ * low sine drop + crash — landing as the digitization wave bursts.
+ */
+export function playFinaleRiser(): void {
+  const c = ensureCtx();
+  const t = c.currentTime;
+
+  const riser = c.createBufferSource();
+  riser.buffer = noiseBuffer(c, 2.2);
+  const bp = c.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.Q.value = 1.4;
+  bp.frequency.setValueAtTime(300, t);
+  bp.frequency.exponentialRampToValueAtTime(6000, t + 2.0);
+  const rg = c.createGain();
+  rg.gain.setValueAtTime(0.0001, t);
+  rg.gain.exponentialRampToValueAtTime(0.14, t + 1.9);
+  rg.gain.exponentialRampToValueAtTime(0.0001, t + 2.15);
+  riser.connect(bp).connect(rg).connect(c.destination);
+  riser.start(t);
+  riser.onended = () => { riser.disconnect(); bp.disconnect(); rg.disconnect(); };
+
+  // impact: sub drop
+  const imp = c.createOscillator();
+  imp.type = 'sine';
+  imp.frequency.setValueAtTime(120, t + 2.0);
+  imp.frequency.exponentialRampToValueAtTime(30, t + 2.9);
+  const ig = c.createGain();
+  ig.gain.setValueAtTime(0.0001, t + 2.0);
+  ig.gain.exponentialRampToValueAtTime(0.2, t + 2.03);
+  ig.gain.exponentialRampToValueAtTime(0.0001, t + 3.4);
+  imp.connect(ig).connect(c.destination);
+  imp.start(t + 2.0);
+  imp.stop(t + 3.5);
+  imp.onended = () => { imp.disconnect(); ig.disconnect(); };
+
+  // impact: crash noise
+  const crash = c.createBufferSource();
+  crash.buffer = noiseBuffer(c, 1.2);
+  const hp = c.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 900;
+  const cg = c.createGain();
+  cg.gain.setValueAtTime(0.11, t + 2.0);
+  cg.gain.exponentialRampToValueAtTime(0.0001, t + 3.1);
+  crash.connect(hp).connect(cg).connect(c.destination);
+  crash.start(t + 2.0);
+  crash.onended = () => { crash.disconnect(); hp.disconnect(); cg.disconnect(); };
+}
+
+/**
+ * Original finale score for stage 3 — slower, heavier, more cinematic than the
+ * stage-2 groove: D-minor open-fifth pedal, wide detuned pads breathing in slow
+ * swells, a huge half-time boom, sparse metallic ticks and a solemn octave
+ * bell. Look-ahead scheduler; returns a stop fn.
+ */
+export function startMatrixFinale(): () => void {
+  const c = ensureCtx();
+
+  const master = c.createGain();
+  master.gain.setValueAtTime(0.0001, c.currentTime);
+  master.gain.exponentialRampToValueAtTime(0.5, c.currentTime + 2.2);
+  const glue = c.createBiquadFilter();
+  glue.type = 'lowpass';
+  glue.frequency.value = 5200;
+  const comp = c.createDynamicsCompressor();
+  master.connect(glue).connect(comp).connect(c.destination);
+
+  const hz = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
+
+  // continuous voices: deep pedal (D1 + A1) and a slow-breathing pad (D3 A3 D4)
+  const sustained: { osc: OscillatorNode; g: GainNode }[] = [];
+  const addSustained = (midi: number, type: OscillatorType, gain: number, lp: number, detune = 0) => {
+    const o = c.createOscillator();
+    o.type = type;
+    o.frequency.value = hz(midi);
+    o.detune.value = detune;
+    const f = c.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = lp;
+    const g = c.createGain();
+    g.gain.value = gain;
+    o.connect(f).connect(g).connect(master);
+    o.start();
+    sustained.push({ osc: o, g });
+  };
+  addSustained(26, 'sawtooth', 0.16, 220);        // D1 pedal
+  addSustained(33, 'sawtooth', 0.1, 260);         // A1 fifth
+  addSustained(50, 'sawtooth', 0.05, 900, -7);    // pad D3
+  addSustained(50, 'sawtooth', 0.05, 900, 7);
+  addSustained(57, 'sawtooth', 0.04, 900, -5);    // pad A3
+  addSustained(62, 'sawtooth', 0.035, 1100, 5);   // pad D4
+
+  // slow swell LFO on the master (8s breathing)
+  const lfo = c.createOscillator();
+  lfo.frequency.value = 0.125;
+  const lfoDepth = c.createGain();
+  lfoDepth.gain.value = 0.09;
+  lfo.connect(lfoDepth).connect(master.gain);
+  lfo.start();
+
+  const boom = (t: number) => {
+    const o = c.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(95, t);
+    o.frequency.exponentialRampToValueAtTime(34, t + 0.5);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.85, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+    o.connect(g).connect(master);
+    o.start(t); o.stop(t + 1.5);
+    o.onended = () => { o.disconnect(); g.disconnect(); };
+  };
+
+  const tick = (t: number) => {
+    const src = c.createBufferSource();
+    src.buffer = noiseBuffer(c, 0.04);
+    const bpF = c.createBiquadFilter();
+    bpF.type = 'bandpass';
+    bpF.frequency.value = 5200 + Math.random() * 2400;
+    bpF.Q.value = 6;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.08, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+    src.connect(bpF).connect(g).connect(master);
+    src.start(t); src.stop(t + 0.05);
+    src.onended = () => { src.disconnect(); bpF.disconnect(); g.disconnect(); };
+  };
+
+  const bell = (t: number, midi: number) => {
+    const o = c.createOscillator();
+    o.type = 'triangle';
+    o.frequency.value = hz(midi);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.11, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
+    o.connect(g).connect(master);
+    o.start(t); o.stop(t + 1.7);
+    o.onended = () => { o.disconnect(); g.disconnect(); };
+  };
+
+  // half-time grid at 64 bpm: boom on beat 1, ticks off-grid, bell each 2 bars
+  const beat = 60 / 64;
+  const BAR = 4; // beats per bar
+  let step = 0;
+  let next = c.currentTime + 0.15;
+  let stopped = false;
+
+  const schedule = () => {
+    if (stopped) return;
+    while (next < c.currentTime + 0.25) {
+      const inBar = step % BAR;
+      const bar = Math.floor(step / BAR);
+      if (inBar === 0) boom(next);
+      if (inBar === 2 && Math.random() < 0.8) tick(next + beat * 0.5);
+      if (inBar === 0 && bar % 2 === 1) bell(next, bar % 4 === 1 ? 74 : 69); // D5 / A4
+      next += beat;
+      step++;
+    }
+  };
+  schedule();
+  const timer = window.setInterval(schedule, 60);
+
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    clearInterval(timer);
+    const now = c.currentTime;
+    master.gain.cancelScheduledValues(now);
+    master.gain.setValueAtTime(master.gain.value, now);
+    master.gain.linearRampToValueAtTime(0.0001, now + 0.5);
+    const end = now + 0.55;
+    sustained.forEach(({ osc }) => osc.stop(end));
+    lfo.stop(end);
+    window.setTimeout(() => {
+      try {
+        sustained.forEach(({ osc, g }) => { osc.disconnect(); g.disconnect(); });
+        lfo.disconnect(); lfoDepth.disconnect();
+        master.disconnect(); glue.disconnect(); comp.disconnect();
+      } catch {}
+    }, 700);
+  };
+}
+
 /** Short rising zap + static tick when re-entering the desktop. */
 export function playReenterZap(): void {
   const c = ensureCtx();

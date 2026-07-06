@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import gsap from 'gsap';
 import { Experience } from './Experience';
+import { AdminHologram } from './AdminHologram';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RoomMatrix — turns the ENTIRE 3D room into the Matrix.
@@ -162,6 +163,21 @@ void main(){
 
 const _dir = new THREE.Vector3();
 
+// What the Admin says (typed beside the hologram) — ties the three answers
+// together. All original text.
+const ADMIN_LINES = [
+  'Hallucination. Turing. Tokens.',
+  'Dreams sold as truth, machines that pass as human,',
+  'and the currency every thought is paid for in.',
+  '',
+  'You answered well — all three gates are open.',
+  'Every agent, every answer, every world like this one:',
+  'all of it runs on tokens.',
+  'Spend yours on things worth building.',
+  '',
+  '— M.T. // ADMIN',
+];
+
 export class RoomMatrix {
   private experience: Experience;
   private uniforms: {
@@ -177,6 +193,13 @@ export class RoomMatrix {
   private injected = new WeakSet<THREE.Material>();
   private points?: THREE.Points;
   private pointsMat?: THREE.ShaderMaterial;
+
+  // stage-3 finale
+  private holo: AdminHologram | null = null;
+  private holoActive = false;
+  private finaleStarted = false;
+  private finaleTimers: number[] = [];
+  private shellGlitchRaf = 0;
 
   private active = false;
   private camPull = 0;   // current pull (0..1), frame-lerped toward camTarget
@@ -221,6 +244,9 @@ export class RoomMatrix {
       fogDensity: this.fogDensity,
       hasFog: !!this.experience.scene.fog,
       pointsVisible: !!this.points?.visible,
+      finaleStarted: this.finaleStarted,
+      holoActive: this.holoActive,
+      holoInDom: !!document.querySelector('.admin-holo'),
     };
   }
 
@@ -331,6 +357,7 @@ export class RoomMatrix {
   private onMessage = (e: MessageEvent) => {
     if (!e.data || !e.data.type) return;
     if (e.data.type === 'matrixEnter') this.enter();
+    else if (e.data.type === 'matrixFinale') this.enterFinale();
     else if (e.data.type === 'matrixExit') this.exit();
   };
 
@@ -361,7 +388,118 @@ export class RoomMatrix {
     gsap.to(this, { fogDensity: this.fogTarget, duration: 2.0, ease: 'power2.inOut' });
   }
 
+  /**
+   * Stage 3: the whole site falls. Sequence — the outer shell itself glitches,
+   * then the digitization wave erupts from the monitor (timed so the audio
+   * riser's impact lands mid-burst), then the Admin flickers into the room.
+   */
+  public enterFinale() {
+    if (this.finaleStarted) return;
+    this.finaleStarted = true;
+    this.glitchShell(1150);
+    this.finaleTimers.push(window.setTimeout(() => this.enter(), 850));
+    this.finaleTimers.push(window.setTimeout(() => this.spawnHologram(), 2700));
+  }
+
+  private spawnHologram() {
+    if (this.holo) return;
+    this.holo = new AdminHologram(() => {
+      // the button and Esc converge on the same path: ask the OS to dismiss,
+      // it exits, posts matrixExit back, and everything restores in order
+      this.experience.monitorScreen?.iframeEl?.contentWindow?.postMessage(
+        { type: 'matrixDismiss' },
+        '*'
+      );
+    });
+    this.holo.object.position.set(0, 2080, 300);
+    this.experience.cssScene.add(this.holo.object);
+    this.holoActive = true;
+    this.holo.typeMessage(ADMIN_LINES);
+  }
+
+  private removeHologram() {
+    const holo = this.holo;
+    if (!holo) return;
+    this.holo = null;
+    this.holoActive = false;
+    holo.dismiss(() => {
+      this.experience.cssScene.remove(holo.object);
+      holo.destroy();
+    });
+  }
+
+  /**
+   * Brief displacement glitch on the ENTIRE page (WebGL canvas, CSS3D room,
+   * HUD — everything), driven by the same feTurbulence/feDisplacementMap
+   * technique as the OS shred. Self-cleans after `duration` ms.
+   */
+  private glitchShell(duration: number) {
+    if (!document.getElementById('shell-glitch-svg')) {
+      document.body.insertAdjacentHTML(
+        'beforeend',
+        `<svg id="shell-glitch-svg" style="position:absolute;width:0;height:0" aria-hidden="true"><defs>
+          <filter id="shell-glitch-filter" x="-20%" y="-20%" width="140%" height="140%">
+            <feTurbulence id="shell-turb" type="fractalNoise" baseFrequency="0 0.14" numOctaves="1" seed="3" result="noise"/>
+            <feDisplacementMap id="shell-disp" in="SourceGraphic" in2="noise" scale="0" xChannelSelector="R" yChannelSelector="G" result="shred"/>
+            <feColorMatrix in="shred" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="r"/>
+            <feOffset id="shell-roff" in="r" dx="0" dy="0" result="ro"/>
+            <feColorMatrix in="shred" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="g"/>
+            <feColorMatrix in="shred" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="b"/>
+            <feOffset id="shell-boff" in="b" dx="0" dy="0" result="bo"/>
+            <feBlend in="ro" in2="g" mode="screen" result="rg"/>
+            <feBlend in="rg" in2="bo" mode="screen"/>
+          </filter>
+        </defs></svg>`
+      );
+    }
+    const root = document.getElementById('root');
+    if (!root) return;
+    const turb = document.getElementById('shell-turb');
+    const disp = document.getElementById('shell-disp');
+    const rOff = document.getElementById('shell-roff');
+    const bOff = document.getElementById('shell-boff');
+
+    cancelAnimationFrame(this.shellGlitchRaf);
+    const start = performance.now();
+    let spikeUntil = 0;
+    let lastExtraAt = 0;
+
+    const frame = (now: number) => {
+      const t = (now - start) / duration;
+      if (t >= 1) {
+        root.style.filter = '';
+        root.style.transform = '';
+        return;
+      }
+      this.shellGlitchRaf = requestAnimationFrame(frame);
+      const base = 0.25 + t * 0.9; // escalates into the wave burst
+      if (now > spikeUntil && Math.random() < 0.14) {
+        spikeUntil = now + 50 + Math.random() * 120;
+        turb?.setAttribute('baseFrequency', `0 ${(0.06 + Math.random() * 0.3).toFixed(3)}`);
+      }
+      const spiking = now < spikeUntil;
+      const intensity = Math.min(1.6, base + (spiking ? 0.5 + Math.random() * 0.7 : 0));
+      disp?.setAttribute('scale', (spiking ? intensity * 70 : intensity * 5).toFixed(1));
+      const split = spiking ? intensity * 7 : intensity;
+      rOff?.setAttribute('dx', (-split).toFixed(1));
+      bOff?.setAttribute('dx', split.toFixed(1));
+      let extra = '';
+      if (spiking && now - lastExtraAt > 320 && Math.random() < 0.3) {
+        lastExtraAt = now;
+        extra = ' invert(1) hue-rotate(90deg)';
+      }
+      root.style.filter = `url(#shell-glitch-filter)${extra}`;
+      const jx = spiking ? (Math.random() - 0.5) * intensity * 10 : 0;
+      root.style.transform = `translate(${jx.toFixed(1)}px, 0)`;
+    };
+    this.shellGlitchRaf = requestAnimationFrame(frame);
+  }
+
   public exit() {
+    this.finaleTimers.forEach(clearTimeout);
+    this.finaleTimers = [];
+    this.finaleStarted = false;
+    this.removeHologram();
     if (!this.active) return;
     this.camTarget = 0;
     gsap.killTweensOf(this.uniforms.uProgress);
@@ -398,9 +536,10 @@ export class RoomMatrix {
 
     // hover-aware pull: mouse on the CRT → glide back in (so the screen/OS is
     // usable mid-matrix); mouse off → drift back out to admire the coded room.
+    // While the Admin hologram is up the camera stays back so he's readable.
     // Not active → always return to 0 (otherwise exit leaves the camera out).
     this.camTarget = this.active
-      ? (this.experience.monitorScreen?.isMouseOnScreen ? 0 : 1)
+      ? (this.holoActive ? 1 : (this.experience.monitorScreen?.isMouseOnScreen ? 0 : 1))
       : 0;
     this.camPull += (this.camTarget - this.camPull) * Math.min(1, dt * 2.6);
     if (Math.abs(this.camPull - this.camTarget) < 0.002) this.camPull = this.camTarget;
@@ -419,6 +558,17 @@ export class RoomMatrix {
   public destroy() {
     window.removeEventListener('message', this.onMessage);
     window.removeEventListener('keydown', this.onKeyDown);
+    this.finaleTimers.forEach(clearTimeout);
+    this.finaleTimers = [];
+    cancelAnimationFrame(this.shellGlitchRaf);
+    const root = document.getElementById('root');
+    if (root) { root.style.filter = ''; root.style.transform = ''; }
+    if (this.holo) {
+      this.experience.cssScene.remove(this.holo.object);
+      this.holo.destroy();
+      this.holo = null;
+    }
+    document.getElementById('shell-glitch-svg')?.remove();
     gsap.killTweensOf(this.uniforms.uProgress);
     gsap.killTweensOf(this.uniforms.uWave);
     gsap.killTweensOf(this);
