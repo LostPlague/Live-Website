@@ -912,8 +912,8 @@ html, body, #root {
 .mtx-message--big {
   top: 0;
   bottom: 0;
-  left: 4%;
-  right: 4%;
+  left: 1.5%;
+  right: 1.5%;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -921,13 +921,13 @@ html, body, #root {
   text-align: center;
 }
 .mtx-line--big {
-  font-size: 48px;
+  font-size: 54px;
   font-weight: bold;
-  line-height: 1.28;
-  margin-bottom: 6px;
+  line-height: 1.2;
+  margin-bottom: 5px;
   text-shadow: 0 0 16px rgba(0, 255, 65, 0.95), 2px 2px 0 #000;
 }
-.mtx-line--big:empty { height: 24px; margin: 0; }
+.mtx-line--big:empty { height: 16px; margin: 0; }
 
 /* countdown before the break */
 .mtx-countdown {
@@ -1016,7 +1016,7 @@ html, body, #root {
 .mtx-vortex-hint {
   margin: 6px 0 0;
   font-family: 'Courier New', monospace;
-  font-size: 22px;
+  font-size: 26px;
   font-weight: bold;
   letter-spacing: 3px;
   color: rgba(0, 255, 65, 0.75);

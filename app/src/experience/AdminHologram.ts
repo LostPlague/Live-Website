@@ -251,8 +251,12 @@ export class AdminHologram {
         }
         const u = new SpeechSynthesisUtterance(text);
         if (voice) u.voice = voice;
-        u.rate = 0.95;   // natural pace —
-        u.pitch = 0.9;   // — natural register: smooth AI, not robot growl
+        // the Admin's character: deliberately steady pace, perfectly neutral
+        // mature register — calm, precise, a little too smooth. (The full
+        // "metallic harmonic resonance" version needs a generated voice clip;
+        // this is the closest browser TTS gets.)
+        u.rate = 0.88;
+        u.pitch = 1.0;
         u.volume = 1.0;
         // advance exactly once per line — onend when it fires, otherwise a
         // duration-estimate watchdog (some voices never deliver end events,

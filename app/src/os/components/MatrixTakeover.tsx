@@ -7,6 +7,7 @@ import {
   startMatrixFinale,
   playFinaleRiser,
   playCountdownTick,
+  playGlassSnap,
   playShatterCrash,
   playReenterZap,
 } from './matrixAudio';
@@ -151,12 +152,13 @@ const VortexPortal: React.FC<{ onEnter: () => void }> = ({ onEnter }) => {
     const S = canvas.width;
     const c = S / 2;
     const ARMS = 3;
-    const parts = new Array(340).fill(0).map(() => {
+    const parts = new Array(380).fill(0).map(() => {
       const arm = (Math.random() * ARMS) | 0;
       return {
         a: (arm / ARMS) * Math.PI * 2 + Math.random() * 0.9, // clustered per arm
         r: 24 + Math.random() * (c - 30),
         s: 0.6 + Math.random() * 1.4,
+        comet: Math.random() < 0.06, // a few bright white runners
       };
     });
     ctx.fillStyle = '#000';
@@ -180,24 +182,27 @@ const VortexPortal: React.FC<{ onEnter: () => void }> = ({ onEnter }) => {
       ctx.beginPath();
       ctx.arc(c, c, pulse * 4, 0, Math.PI * 2);
       ctx.fill();
-      // breathing event-horizon ring
-      ctx.strokeStyle = `rgba(0, 255, 65, ${(0.25 + 0.15 * Math.sin(t * 3.1)).toFixed(2)})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(c, c, c - 12 + Math.sin(t * 1.7) * 4, 0, Math.PI * 2);
-      ctx.stroke();
-      // spiral arms spinning inward
+      // spiral arms: glowing STREAKS accelerating into the throat
       for (const p of parts) {
-        p.a += (0.022 + (c - p.r) * 0.0007) * p.s;
-        p.r -= 0.55 * p.s;
-        if (p.r < 12) p.r = c - 26 + Math.random() * 14;
-        const wobble = Math.sin(p.a * 3 + t) * 2;
-        const x = c + Math.cos(p.a) * (p.r + wobble);
-        const y = c + Math.sin(p.a) * (p.r + wobble) * 0.9;
+        const px = c + Math.cos(p.a) * p.r;
+        const py = c + Math.sin(p.a) * p.r * 0.9;
+        p.a += (0.02 + (c - p.r) * 0.00085) * p.s;
+        p.r -= (0.5 + (c - p.r) * 0.004) * p.s; // faster as it falls in
+        if (p.r < 10) {
+          p.r = c - 24 + Math.random() * 12;
+          p.comet = Math.random() < 0.06;
+        }
+        const x = c + Math.cos(p.a) * p.r;
+        const y = c + Math.sin(p.a) * p.r * 0.9;
         const b = 1 - p.r / c;
-        const size = 1.2 + b * 3.2;
-        ctx.fillStyle = `rgba(${(60 + b * 170) | 0}, 255, ${(110 + b * 130) | 0}, ${(0.2 + b * 0.8).toFixed(2)})`;
-        ctx.fillRect(x, y, size, size);
+        ctx.strokeStyle = p.comet
+          ? `rgba(235, 255, 245, ${(0.5 + b * 0.5).toFixed(2)})`
+          : `rgba(${(50 + b * 170) | 0}, 255, ${(100 + b * 140) | 0}, ${(0.16 + b * 0.7).toFixed(2)})`;
+        ctx.lineWidth = p.comet ? 2.6 : 1 + b * 2;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(x, y);
+        ctx.stroke();
       }
     };
     raf = requestAnimationFrame(frame);
@@ -256,48 +261,124 @@ const ShatterOverlay: React.FC<{ vortex: boolean; onVortex: () => void }> = ({
     return list;
   }, []);
 
-  // cracks race outward for ~0.4s, then the shards let go
+  // A real tempered-glass spiderweb: radial mains with forking branches plus
+  // concentric web rings, revealed outward from the impact point with a soft
+  // green glow under a bright core. The web holds for a beat, THEN the shards
+  // let go (with the crash) while the crack fades under them.
   useEffect(() => {
     const canvas = crackRef.current;
     if (!canvas) return;
     canvas.width = canvas.clientWidth;
     canvas.height = canvas.clientHeight;
     const ctx = canvas.getContext('2d')!;
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
-    const maxR = Math.hypot(cx, cy);
-    const cracks = new Array(13).fill(0).map(() => ({
+    const W = canvas.width;
+    const H = canvas.height;
+    const cx = W / 2;
+    const cy = H / 2;
+    const maxR = Math.hypot(cx, cy) * 1.02;
+
+    type Pt = { x: number; y: number };
+    const pointAt = (pts: Pt[], f: number): Pt =>
+      pts[Math.min(pts.length - 1, Math.max(1, Math.round(f * (pts.length - 1))))];
+
+    // precompute the whole web once, then animate its reveal
+    const polylines: { pts: Pt[]; width: number; delay: number }[] = [];
+    const MAINS = 15;
+    const mains: Pt[][] = [];
+    for (let m = 0; m < MAINS; m++) {
+      const base = (m / MAINS) * Math.PI * 2 + Math.random() * 0.25;
+      const pts: Pt[] = [{ x: cx, y: cy }];
+      let a = base;
+      const segs = 11;
+      for (let s = 1; s <= segs; s++) {
+        a += (Math.random() - 0.5) * 0.28;
+        const r = (maxR * s) / segs;
+        pts.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
+      }
+      mains.push(pts);
+      polylines.push({ pts, width: 2.6, delay: 0 });
+      // secondary fractures forking off the main crack
+      const branches = 2 + ((Math.random() * 2) | 0);
+      for (let b = 0; b < branches; b++) {
+        const start = pointAt(pts, 0.3 + Math.random() * 0.4);
+        const bp: Pt[] = [start];
+        let ba = base + (Math.random() < 0.5 ? 1 : -1) * (0.35 + Math.random() * 0.5);
+        const bsegs = 3 + ((Math.random() * 3) | 0);
+        for (let s = 0; s < bsegs; s++) {
+          ba += (Math.random() - 0.5) * 0.3;
+          const last = bp[bp.length - 1];
+          const step = 26 + Math.random() * 40;
+          bp.push({ x: last.x + Math.cos(ba) * step, y: last.y + Math.sin(ba) * step });
+        }
+        polylines.push({ pts: bp, width: 1.3, delay: 0.3 + Math.random() * 0.3 });
+      }
+    }
+    // concentric rings stitching neighbouring mains into a spiderweb
+    for (const rr of [0.24, 0.47, 0.72]) {
+      for (let m = 0; m < MAINS; m++) {
+        const p1 = pointAt(mains[m], rr);
+        const p2 = pointAt(mains[(m + 1) % MAINS], rr);
+        const mid = {
+          x: (p1.x + p2.x) / 2 + (Math.random() - 0.5) * 18,
+          y: (p1.y + p2.y) / 2 + (Math.random() - 0.5) * 18,
+        };
+        polylines.push({ pts: [p1, mid, p2], width: 1.1, delay: 0.45 + rr * 0.4 });
+      }
+    }
+    // debris popping off the impact point
+    const debris = new Array(10).fill(0).map(() => ({
       a: Math.random() * Math.PI * 2,
-      wobble: 0.5 + Math.random() * 0.9,
+      sp: 90 + Math.random() * 240,
     }));
+
+    const DUR = 460;
     const start = performance.now();
     let raf = 0;
     const frame = (now: number) => {
-      const p = Math.min(1, (now - start) / 380);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.strokeStyle = 'rgba(200, 255, 220, 0.9)';
-      ctx.shadowColor = '#00ff41';
-      ctx.shadowBlur = 8;
-      for (const cr of cracks) {
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        let a = cr.a;
-        const segs = 9;
-        for (let s = 1; s <= segs; s++) {
-          const rr = (maxR * p * s) / segs;
-          a += (Math.random() - 0.5) * 0.3 * cr.wobble;
-          ctx.lineWidth = Math.max(0.5, 3 * (1 - s / segs));
-          ctx.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+      const p = Math.min(1, (now - start) / DUR);
+      ctx.clearRect(0, 0, W, H);
+      for (const line of polylines) {
+        const lp = Math.min(1, Math.max(0, (p - line.delay) / Math.max(0.001, 1 - line.delay)));
+        if (lp <= 0) continue;
+        const upto = Math.max(2, Math.ceil(lp * line.pts.length));
+        for (const pass of [0, 1] as const) {
+          ctx.beginPath();
+          ctx.moveTo(line.pts[0].x, line.pts[0].y);
+          for (let i = 1; i < upto; i++) ctx.lineTo(line.pts[i].x, line.pts[i].y);
+          if (pass === 0) {
+            ctx.strokeStyle = 'rgba(0, 255, 65, 0.3)';
+            ctx.lineWidth = line.width * 4;
+            ctx.shadowColor = '#00ff41';
+            ctx.shadowBlur = 16;
+          } else {
+            ctx.strokeStyle = 'rgba(238, 255, 246, 0.95)';
+            ctx.lineWidth = line.width;
+            ctx.shadowBlur = 0;
+          }
+          ctx.stroke();
         }
-        ctx.stroke();
+      }
+      // impact-point debris, fading as it flies
+      ctx.shadowBlur = 0;
+      for (const d of debris) {
+        const dr = d.sp * p;
+        ctx.fillStyle = `rgba(220, 255, 235, ${(1 - p).toFixed(2)})`;
+        ctx.fillRect(cx + Math.cos(d.a) * dr, cy + Math.sin(d.a) * dr, 2.4, 2.4);
       }
       if (p < 1) raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
-    const t = window.setTimeout(() => setFly(true), 430);
+
+    // hold the finished web for a beat, then the glass gives way
+    const flyT = window.setTimeout(() => {
+      setFly(true);
+      playShatterCrash();
+      canvas.style.transition = 'opacity 0.5s ease-out';
+      canvas.style.opacity = '0';
+    }, 700);
     return () => {
       cancelAnimationFrame(raf);
-      clearTimeout(t);
+      clearTimeout(flyT);
     };
   }, []);
 
@@ -481,8 +562,8 @@ const MatrixScreen: React.FC<{
 
   useEffect(() => {
     if (finaleStage !== 'shatter') return;
-    playShatterCrash();
-    const t = setTimeout(() => setFinaleStage('vortex'), 1500);
+    playGlassSnap(); // the fracture races out; the CRASH fires when shards let go
+    const t = setTimeout(() => setFinaleStage('vortex'), 1900);
     return () => clearTimeout(t);
   }, [finaleStage]);
 

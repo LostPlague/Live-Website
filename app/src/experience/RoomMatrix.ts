@@ -217,6 +217,11 @@ export class RoomMatrix {
   private faceMat?: THREE.ShaderMaterial;
   private faceOccluderMat?: THREE.MeshBasicMaterial;
   private faceOpacity = { value: 0 };
+  // glowing red eyes — placement as fractions of the face's size (nudge to fit
+  // the model's sockets), size in world units
+  private eyeSprites: THREE.Sprite[] = [];
+  private eyeMat?: THREE.SpriteMaterial;
+  public eyeTune = { x: 0.15, y: 0.12, z: 0.62, size: 58 };
   private faceLoaded = false;
   private facePendingShow = false;
   private faceBasePos = new THREE.Vector3(-1150, 1230, 350);
@@ -277,6 +282,8 @@ export class RoomMatrix {
       faceLoaded: this.faceLoaded,
       faceVisible: !!this.faceGroup?.visible,
       faceOpacity: this.faceOpacity.value,
+      eyes: this.eyeSprites.length,
+      eyeOpacity: this.eyeMat?.opacity ?? 0,
     };
   }
 
@@ -471,6 +478,29 @@ export class RoomMatrix {
         const wrapper = new THREE.Group();
         wrapper.add(occluder);
         wrapper.add(model);
+
+        // red light in the eyes: two additive glow sprites in the sockets,
+        // always drawn over the face (depthTest off) so they burn through
+        this.eyeMat = new THREE.SpriteMaterial({
+          map: this.makeEyeTexture(),
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          depthTest: false,
+          depthWrite: false,
+          opacity: 0,
+        });
+        const ex = size.x * s * this.eyeTune.x;
+        const ey = size.y * s * this.eyeTune.y;
+        const ez = size.z * s * 0.5 * this.eyeTune.z;
+        for (const sideX of [-ex, ex]) {
+          const eye = new THREE.Sprite(this.eyeMat);
+          eye.position.set(sideX, ey, ez);
+          eye.scale.setScalar(this.eyeTune.size);
+          eye.renderOrder = 4;
+          wrapper.add(eye);
+          this.eyeSprites.push(eye);
+        }
+
         wrapper.position.copy(this.faceBasePos);
         wrapper.visible = false;
         this.faceGroup = wrapper;
@@ -481,6 +511,23 @@ export class RoomMatrix {
       undefined,
       (err) => console.error('Admin face failed to load:', err)
     );
+  }
+
+  /** small radial red-glow sprite texture (white-hot core → red → transparent) */
+  private makeEyeTexture(): THREE.Texture {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 64;
+    const ctx = cv.getContext('2d')!;
+    const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0, 'rgba(255, 235, 235, 1)');
+    g.addColorStop(0.3, 'rgba(255, 40, 40, 0.85)');
+    g.addColorStop(0.7, 'rgba(200, 0, 0, 0.25)');
+    g.addColorStop(1, 'rgba(120, 0, 0, 0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 64, 64);
+    const tex = new THREE.Texture(cv);
+    tex.needsUpdate = true;
+    return tex;
   }
 
   private showFace() {
@@ -743,11 +790,16 @@ export class RoomMatrix {
       cam.lookAt(tgt);
     }
 
-    // the Admin face idles: slow yaw sweep + gentle bob
+    // the Admin face idles: slow yaw sweep + gentle bob; eyes pulse red
     if (this.faceGroup && this.faceGroup.visible) {
       const secs = elapsedMs * 0.001;
       this.faceGroup.rotation.y = Math.sin(secs * 0.5) * 0.21;
       this.faceGroup.position.y = this.faceBasePos.y + Math.sin(secs * 0.9) * 22;
+      if (this.eyeMat) {
+        this.eyeMat.opacity = this.faceOpacity.value * (0.75 + 0.25 * Math.sin(secs * 2.6));
+      }
+      const eyeScale = this.eyeTune.size * (0.92 + 0.1 * Math.sin(secs * 3.4));
+      for (const eye of this.eyeSprites) eye.scale.setScalar(eyeScale);
     }
 
     // hologram pass — rendered with the final (pulled) camera so it tracks
@@ -782,6 +834,9 @@ export class RoomMatrix {
       });
       this.faceMat?.dispose();
       this.faceOccluderMat?.dispose();
+      this.eyeMat?.map?.dispose();
+      this.eyeMat?.dispose();
+      this.eyeSprites = [];
       this.faceGroup = undefined;
     }
     document.getElementById('shell-glitch-svg')?.remove();

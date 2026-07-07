@@ -533,49 +533,111 @@ export function playCountdownTick(n: number): void {
   s.onended = () => { s.disconnect(); sg.disconnect(); };
 }
 
-/** The screen breaks: bright glass burst + low body thump + shard tinkles. */
-export function playShatterCrash(): void {
+/** First fracture: a sharp snap as the cracks race across the glass. */
+export function playGlassSnap(): void {
   const c = ensureCtx();
   const t = c.currentTime;
 
-  // main crash burst
+  // sharp click of the initial fracture
   const src = c.createBufferSource();
-  src.buffer = noiseBuffer(c, 0.7);
+  src.buffer = noiseBuffer(c, 0.09);
   const hp = c.createBiquadFilter();
   hp.type = 'highpass';
-  hp.frequency.value = 2600;
+  hp.frequency.value = 3600;
   const g = c.createGain();
-  g.gain.setValueAtTime(0.26, t);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+  g.gain.setValueAtTime(0.3, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
   src.connect(hp).connect(g).connect(c.destination);
   src.start(t);
   src.onended = () => { src.disconnect(); hp.disconnect(); g.disconnect(); };
 
-  // low body thump
-  const imp = c.createOscillator();
-  imp.type = 'sine';
-  imp.frequency.setValueAtTime(95, t);
-  imp.frequency.exponentialRampToValueAtTime(30, t + 0.4);
-  const ig = c.createGain();
-  ig.gain.setValueAtTime(0.0001, t);
-  ig.gain.exponentialRampToValueAtTime(0.2, t + 0.012);
-  ig.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
-  imp.connect(ig).connect(c.destination);
-  imp.start(t); imp.stop(t + 0.75);
-  imp.onended = () => { imp.disconnect(); ig.disconnect(); };
+  // resonant ping of stressed glass
+  const o = c.createOscillator();
+  o.type = 'triangle';
+  o.frequency.value = 3200;
+  const og = c.createGain();
+  og.gain.setValueAtTime(0.0001, t);
+  og.gain.exponentialRampToValueAtTime(0.09, t + 0.004);
+  og.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+  o.connect(og).connect(c.destination);
+  o.start(t); o.stop(t + 0.4);
+  o.onended = () => { o.disconnect(); og.disconnect(); };
 
-  // falling shards: staggered high pings
-  for (let i = 0; i < 10; i++) {
-    const st = t + 0.05 + Math.random() * 0.5;
+  // tension creak underneath
+  const s = c.createOscillator();
+  s.type = 'sawtooth';
+  s.frequency.setValueAtTime(160, t);
+  s.frequency.exponentialRampToValueAtTime(90, t + 0.3);
+  const sg = c.createGain();
+  sg.gain.setValueAtTime(0.0001, t);
+  sg.gain.exponentialRampToValueAtTime(0.045, t + 0.02);
+  sg.gain.exponentialRampToValueAtTime(0.0001, t + 0.32);
+  s.connect(sg).connect(c.destination);
+  s.start(t); s.stop(t + 0.35);
+  s.onended = () => { s.disconnect(); sg.disconnect(); };
+}
+
+/** The screen gives way: big glass crash — burst, double thump, crunch, 16 shards. */
+export function playShatterCrash(): void {
+  const c = ensureCtx();
+  const t = c.currentTime;
+
+  // main crash burst (longer, louder)
+  const src = c.createBufferSource();
+  src.buffer = noiseBuffer(c, 1.1);
+  const hp = c.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 2400;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.32, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 1.0);
+  src.connect(hp).connect(g).connect(c.destination);
+  src.start(t);
+  src.onended = () => { src.disconnect(); hp.disconnect(); g.disconnect(); };
+
+  // mid crunch — the body of the break
+  const cr = c.createBufferSource();
+  cr.buffer = noiseBuffer(c, 0.35);
+  const bp = c.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 700;
+  bp.Q.value = 0.8;
+  const cg = c.createGain();
+  cg.gain.setValueAtTime(0.22, t);
+  cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.32);
+  cr.connect(bp).connect(cg).connect(c.destination);
+  cr.start(t);
+  cr.onended = () => { cr.disconnect(); bp.disconnect(); cg.disconnect(); };
+
+  // double thump: impact + deep after-shock
+  const thump = (at: number, f0: number, f1: number, gain: number, dur: number) => {
+    const o = c.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(f0, at);
+    o.frequency.exponentialRampToValueAtTime(f1, at + dur * 0.6);
+    const og = c.createGain();
+    og.gain.setValueAtTime(0.0001, at);
+    og.gain.exponentialRampToValueAtTime(gain, at + 0.012);
+    og.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    o.connect(og).connect(c.destination);
+    o.start(at); o.stop(at + dur + 0.05);
+    o.onended = () => { o.disconnect(); og.disconnect(); };
+  };
+  thump(t, 95, 30, 0.22, 0.7);
+  thump(t + 0.09, 60, 24, 0.16, 0.9);
+
+  // raining shards: 16 staggered high pings
+  for (let i = 0; i < 16; i++) {
+    const st = t + 0.05 + Math.random() * 0.8;
     const o = c.createOscillator();
     o.type = 'triangle';
-    o.frequency.value = 1800 + Math.random() * 3800;
+    o.frequency.value = 1700 + Math.random() * 4200;
     const og = c.createGain();
     og.gain.setValueAtTime(0.0001, st);
-    og.gain.exponentialRampToValueAtTime(0.04 + Math.random() * 0.05, st + 0.004);
-    og.gain.exponentialRampToValueAtTime(0.0001, st + 0.12 + Math.random() * 0.16);
+    og.gain.exponentialRampToValueAtTime(0.035 + Math.random() * 0.05, st + 0.004);
+    og.gain.exponentialRampToValueAtTime(0.0001, st + 0.12 + Math.random() * 0.2);
     o.connect(og).connect(c.destination);
-    o.start(st); o.stop(st + 0.32);
+    o.start(st); o.stop(st + 0.36);
     o.onended = () => { o.disconnect(); og.disconnect(); };
   }
 }
