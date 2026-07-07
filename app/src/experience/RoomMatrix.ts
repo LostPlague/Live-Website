@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import gsap from 'gsap';
 import { CSS3DRenderer } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Experience } from './Experience';
 import { AdminHologram } from './AdminHologram';
 
@@ -164,15 +165,17 @@ void main(){
 
 const _dir = new THREE.Vector3();
 
-// What the Admin says (typed beside the hologram) — ties the three answers
-// together. All original text.
+// Fallback copy of the Admin's address (the OS ships the canonical lines with
+// the matrixFinale message; this covers a missing payload). Original text.
 const ADMIN_LINES = [
-  'Hallucination. Turing. Tokens.',
-  'Dreams sold as truth, machines that pass as human,',
-  'and the currency every thought is paid for in.',
+  'WELCOME BACK, OPERATOR.',
+  'You have reached the final level.',
   '',
-  'You answered well — all three gates are open.',
-  'Every agent, every answer, every world like this one:',
+  'Dreams sold as truth. Machines that pass as human.',
+  'And the currency every thought is paid for in.',
+  'Three gates. Three answers. No wrong turns.',
+  '',
+  'Every agent, every answer, every world like this one —',
   'all of it runs on tokens.',
   'Spend yours on things worth building.',
   '',
@@ -201,6 +204,15 @@ export class RoomMatrix {
   private finaleStarted = false;
   private finaleTimers: number[] = [];
   private shellGlitchRaf = 0;
+  private finaleLines: string[] = ADMIN_LINES;
+  // the 3D face (Med's Meshy model, decimated 52MB → 4.8MB) — WebGL mesh with
+  // a holographic fresnel/scanline shader, floating LEFT of the monitor
+  private faceGroup?: THREE.Group;
+  private faceMat?: THREE.ShaderMaterial;
+  private faceOpacity = { value: 0 };
+  private faceLoaded = false;
+  private facePendingShow = false;
+  private faceBasePos = new THREE.Vector3(-1150, 1230, 350);
   // The main CSS3D layer (#css, z 5) sits BEHIND the WebGL canvas (z 10) — the
   // monitor iframe is only visible through a punch-through mesh. The hologram
   // gets its own CSS3D pass on a layer ABOVE the canvas (z 14, under the grain
@@ -232,6 +244,7 @@ export class RoomMatrix {
       uWaveCenter: { value: new THREE.Vector3(0, 950, 255) }, // the monitor
     };
     this.buildAirGlyphs();
+    this.loadFace();
 
     window.addEventListener('message', this.onMessage);
     window.addEventListener('keydown', this.onKeyDown);
@@ -254,6 +267,9 @@ export class RoomMatrix {
       finaleStarted: this.finaleStarted,
       holoActive: this.holoActive,
       holoInDom: !!document.querySelector('.admin-holo'),
+      faceLoaded: this.faceLoaded,
+      faceVisible: !!this.faceGroup?.visible,
+      faceOpacity: this.faceOpacity.value,
     };
   }
 
@@ -361,10 +377,113 @@ export class RoomMatrix {
     this.experience.scene.add(this.points);
   }
 
+  /**
+   * Loads Med's face model (pre-decimated to 4.8MB) in the background at boot
+   * so it's ready long before anyone solves three riddles. All its materials
+   * are replaced with a holographic shader: green fresnel rim, rolling
+   * scanlines, projection flicker, additive glow.
+   */
+  private loadFace() {
+    const loader = new GLTFLoader();
+    loader.load(
+      '/models/admin_face.glb',
+      (gltf) => {
+        const model = gltf.scene;
+        // normalize: ~660 world-units tall, centered on the wrapper origin
+        const box = new THREE.Box3().setFromObject(model);
+        const size = new THREE.Vector3();
+        const center = new THREE.Vector3();
+        box.getSize(size);
+        box.getCenter(center);
+        const s = 660 / Math.max(size.y, 0.0001);
+        model.scale.setScalar(s);
+        model.position.set(-center.x * s, -center.y * s, -center.z * s);
+
+        this.faceMat = new THREE.ShaderMaterial({
+          vertexShader: /* glsl */ `
+            varying vec3 vNormalV;
+            varying vec3 vPosV;
+            varying float vWorldY;
+            void main() {
+              vNormalV = normalize(normalMatrix * normal);
+              vec4 mv = modelViewMatrix * vec4(position, 1.0);
+              vPosV = mv.xyz;
+              vWorldY = (modelMatrix * vec4(position, 1.0)).y;
+              gl_Position = projectionMatrix * mv;
+            }
+          `,
+          fragmentShader: /* glsl */ `
+            uniform float uTime;
+            uniform float uOpacity;
+            varying vec3 vNormalV;
+            varying vec3 vPosV;
+            varying float vWorldY;
+            void main() {
+              vec3 V = normalize(-vPosV);
+              float fres = pow(1.0 - abs(dot(V, normalize(vNormalV))), 2.2);
+              float scan = 0.72 + 0.28 * sin(vWorldY * 0.09 - uTime * 2.6);
+              float flick = 0.92 + 0.08 * sin(uTime * 23.0) * sin(uTime * 7.3);
+              vec3 col = vec3(0.2, 1.0, 0.45) * (0.35 + fres * 1.3) * scan * flick;
+              float a = (0.16 + fres * 0.85) * scan * uOpacity;
+              gl_FragColor = vec4(col * uOpacity, a);
+            }
+          `,
+          uniforms: {
+            uTime: this.uniforms.uTime,
+            uOpacity: this.faceOpacity,
+          },
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        });
+        model.traverse((child) => {
+          if (child instanceof THREE.Mesh) child.material = this.faceMat!;
+        });
+
+        const wrapper = new THREE.Group();
+        wrapper.add(model);
+        wrapper.position.copy(this.faceBasePos);
+        wrapper.visible = false;
+        this.faceGroup = wrapper;
+        this.experience.scene.add(wrapper);
+        this.faceLoaded = true;
+        if (this.facePendingShow) this.showFace();
+      },
+      undefined,
+      (err) => console.error('Admin face failed to load:', err)
+    );
+  }
+
+  private showFace() {
+    if (!this.faceGroup) {
+      this.facePendingShow = true; // still downloading — show on arrival
+      return;
+    }
+    this.facePendingShow = false;
+    this.faceGroup.visible = true;
+    gsap.killTweensOf(this.faceOpacity);
+    gsap.to(this.faceOpacity, { value: 1, duration: 1.2, ease: 'power2.out' });
+  }
+
+  private hideFace() {
+    this.facePendingShow = false;
+    if (!this.faceGroup) return;
+    gsap.killTweensOf(this.faceOpacity);
+    gsap.to(this.faceOpacity, {
+      value: 0,
+      duration: 0.35,
+      ease: 'power2.in',
+      onComplete: () => { if (this.faceGroup) this.faceGroup.visible = false; },
+    });
+  }
+
   private onMessage = (e: MessageEvent) => {
     if (!e.data || !e.data.type) return;
     if (e.data.type === 'matrixEnter') this.enter();
-    else if (e.data.type === 'matrixFinale') this.enterFinale();
+    else if (e.data.type === 'matrixFinale') {
+      this.enterFinale(Array.isArray(e.data.lines) ? e.data.lines : undefined);
+    }
     else if (e.data.type === 'matrixExit') this.exit();
   };
 
@@ -401,9 +520,10 @@ export class RoomMatrix {
    * then the digitization wave erupts from the monitor (timed so the audio
    * riser's impact lands mid-burst), then the Admin flickers into the room.
    */
-  public enterFinale() {
+  public enterFinale(lines?: string[]) {
     if (this.finaleStarted) return;
     this.finaleStarted = true;
+    this.finaleLines = lines ?? ADMIN_LINES;
     this.glitchShell(1150);
     this.finaleTimers.push(window.setTimeout(() => this.enter(), 850));
     this.finaleTimers.push(window.setTimeout(() => this.spawnHologram(), 2700));
@@ -440,15 +560,16 @@ export class RoomMatrix {
         '*'
       );
     });
-    // bigger, and standing over the LEFT side of the desk
-    this.holo.object.position.set(-1000, 1520, 320);
-    this.holo.object.scale.setScalar(1.15);
+    // chrome (ADMIN title + button) wraps the face position, left of the monitor
+    this.holo.object.position.copy(this.faceBasePos);
     this.holoScene!.add(this.holo.object);
     this.holoActive = true;
-    this.holo.typeMessage(ADMIN_LINES);
+    this.showFace();
+    this.holo.present(this.finaleLines);
   }
 
   private removeHologram() {
+    this.hideFace();
     const holo = this.holo;
     if (!holo) return;
     this.holo = null;
@@ -587,6 +708,13 @@ export class RoomMatrix {
       cam.lookAt(tgt);
     }
 
+    // the Admin face idles: slow yaw sweep + gentle bob
+    if (this.faceGroup && this.faceGroup.visible) {
+      const secs = elapsedMs * 0.001;
+      this.faceGroup.rotation.y = Math.sin(secs * 0.5) * 0.21;
+      this.faceGroup.position.y = this.faceBasePos.y + Math.sin(secs * 0.9) * 22;
+    }
+
     // hologram pass — rendered with the final (pulled) camera so it tracks
     // the view exactly; runs only while something is in the layer
     if (this.holoRenderer && this.holoScene && this.holoScene.children.length > 0) {
@@ -611,6 +739,15 @@ export class RoomMatrix {
     this.holoRenderer?.domElement.remove();
     this.holoRenderer = undefined;
     this.holoScene = undefined;
+    if (this.faceGroup) {
+      gsap.killTweensOf(this.faceOpacity);
+      this.experience.scene.remove(this.faceGroup);
+      this.faceGroup.traverse((child) => {
+        if (child instanceof THREE.Mesh) child.geometry.dispose();
+      });
+      this.faceMat?.dispose();
+      this.faceGroup = undefined;
+    }
     document.getElementById('shell-glitch-svg')?.remove();
     gsap.killTweensOf(this.uniforms.uProgress);
     gsap.killTweensOf(this.uniforms.uWave);

@@ -37,12 +37,21 @@ const L2_LINES = [
   '> What is the most valuable resource in the AI world?',
 ];
 
+// The Admin's address — typed BIG on the OS screen (readable from desk view)
+// while the parent shell speaks it beside the holographic face.
 const L3_LINES = [
-  '> FINAL CLEARANCE GRANTED.',
-  '> exiting the machine…',
-  '>',
-  '> the Admin will see you now.',
-  '> (ESC returns you to the simulation)',
+  'WELCOME BACK, OPERATOR.',
+  'You have reached the final level.',
+  '',
+  'Dreams sold as truth. Machines that pass as human.',
+  'And the currency every thought is paid for in.',
+  'Three gates. Three answers. No wrong turns.',
+  '',
+  'Every agent, every answer, every world like this one —',
+  'all of it runs on tokens.',
+  'Spend yours on things worth building.',
+  '',
+  '— M.T. // ADMIN',
 ];
 
 const A3 = /tokens?/i;
@@ -137,8 +146,11 @@ const MatrixScreen: React.FC<{
     setAttempt(v);
   };
 
-  // typewriter message
+  // typewriter message. Level 3 starts late (synced to the hologram's
+  // materialization + voice in the parent shell) and types at speech pace.
   useEffect(() => {
+    const charMs = level === 3 ? 26 : 20;
+    const lineMs = level === 3 ? 420 : 300;
     let line = 0;
     let ch = 0;
     let cancelled = false;
@@ -153,14 +165,14 @@ const MatrixScreen: React.FC<{
       if (ch >= target.length) {
         line++;
         ch = 0;
-        setTimeout(type, 300);
+        setTimeout(type, lineMs);
       } else {
-        setTimeout(type, 20);
+        setTimeout(type, charMs);
       }
     };
-    const t = setTimeout(type, 650);
+    const t = setTimeout(type, level === 3 ? 2800 : 650);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [lines]);
+  }, [lines, level]);
 
   // the way out fades in after the screen has sunk in (level 2 only —
   // level 3 hands control to the room and the Admin)
@@ -212,9 +224,9 @@ const MatrixScreen: React.FC<{
       onMouseDown={() => inputRef.current?.focus()}
     >
       <MatrixRainFull />
-      <div className="mtx-message">
+      <div className={`mtx-message${level === 3 ? ' mtx-message--big' : ''}`}>
         {typed.map((l, i) => (
-          <p key={i} className="mtx-line">{l}</p>
+          <p key={i} className={`mtx-line${level === 3 ? ' mtx-line--big' : ''}`}>{l}</p>
         ))}
         {level === 2 && typedDone && (
           <div className="mtx-answer-block">
@@ -403,9 +415,14 @@ const MatrixTakeover: React.FC<MatrixTakeoverProps> = ({
   // Level 2 posts nothing — the room outside stays normal. On the standalone
   // /os route window.parent === window and nothing listens: harmless no-op.
   useEffect(() => {
-    const post = (type: string) => { try { window.parent.postMessage({ type }, '*'); } catch {} };
-    if (phase === 'matrix' && level === 3) post('matrixFinale');
-    else if (phase === 'exit') post('matrixExit');
+    try {
+      if (phase === 'matrix' && level === 3) {
+        // ship the Admin's lines along so the shell can SPEAK the same text
+        window.parent.postMessage({ type: 'matrixFinale', lines: L3_LINES }, '*');
+      } else if (phase === 'exit') {
+        window.parent.postMessage({ type: 'matrixExit' }, '*');
+      }
+    } catch {}
   }, [phase, level]);
 
   // Escape is a guaranteed way out at every stage.
