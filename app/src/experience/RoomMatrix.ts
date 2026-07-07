@@ -171,12 +171,18 @@ const ADMIN_LINES = [
   'WELCOME BACK, OPERATOR.',
   'You have reached the final level.',
   '',
-  'Dreams sold as truth. Machines that pass as human.',
-  'And the currency every thought is paid for in.',
-  'Three gates. Three answers. No wrong turns.',
+  'Dreams sold as truth.',
+  'Machines that pass as human.',
+  'And the currency every thought',
+  'is paid for in.',
   '',
-  'Every agent, every answer, every world like this one —',
+  'Three gates. Three answers.',
+  'No wrong turns.',
+  '',
+  'Every agent, every answer,',
+  'every world like this one —',
   'all of it runs on tokens.',
+  '',
   'Spend yours on things worth building.',
   '',
   '— M.T. // ADMIN',
@@ -209,6 +215,7 @@ export class RoomMatrix {
   // a holographic fresnel/scanline shader, floating LEFT of the monitor
   private faceGroup?: THREE.Group;
   private faceMat?: THREE.ShaderMaterial;
+  private faceOccluderMat?: THREE.MeshBasicMaterial;
   private faceOpacity = { value: 0 };
   private faceLoaded = false;
   private facePendingShow = false;
@@ -421,10 +428,10 @@ export class RoomMatrix {
             void main() {
               vec3 V = normalize(-vPosV);
               float fres = pow(1.0 - abs(dot(V, normalize(vNormalV))), 2.2);
-              float scan = 0.72 + 0.28 * sin(vWorldY * 0.09 - uTime * 2.6);
-              float flick = 0.92 + 0.08 * sin(uTime * 23.0) * sin(uTime * 7.3);
-              vec3 col = vec3(0.2, 1.0, 0.45) * (0.35 + fres * 1.3) * scan * flick;
-              float a = (0.16 + fres * 0.85) * scan * uOpacity;
+              float scan = 0.85 + 0.15 * sin(vWorldY * 0.09 - uTime * 2.6);
+              float flick = 0.94 + 0.06 * sin(uTime * 23.0) * sin(uTime * 7.3);
+              vec3 col = vec3(0.2, 1.0, 0.45) * (0.55 + fres * 1.35) * scan * flick;
+              float a = (0.32 + fres * 0.9) * scan * uOpacity;
               gl_FragColor = vec4(col * uOpacity, a);
             }
           `,
@@ -438,10 +445,31 @@ export class RoomMatrix {
           side: THREE.DoubleSide,
         });
         model.traverse((child) => {
-          if (child instanceof THREE.Mesh) child.material = this.faceMat!;
+          if (child instanceof THREE.Mesh) {
+            child.material = this.faceMat!;
+            child.renderOrder = 2;
+          }
         });
 
+        // dark occluder shell just inside the glow: blocks the bright rain on
+        // the wall BEHIND the face so the hologram reads crisp, not washed out
+        this.faceOccluderMat = new THREE.MeshBasicMaterial({
+          color: 0x03140a,
+          transparent: true,
+          opacity: 0,
+          depthWrite: true,
+        });
+        const occluder = model.clone(true);
+        occluder.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            child.material = this.faceOccluderMat!;
+            child.renderOrder = 1;
+          }
+        });
+        occluder.scale.multiplyScalar(0.997);
+
         const wrapper = new THREE.Group();
+        wrapper.add(occluder);
         wrapper.add(model);
         wrapper.position.copy(this.faceBasePos);
         wrapper.visible = false;
@@ -464,12 +492,20 @@ export class RoomMatrix {
     this.faceGroup.visible = true;
     gsap.killTweensOf(this.faceOpacity);
     gsap.to(this.faceOpacity, { value: 1, duration: 1.2, ease: 'power2.out' });
+    if (this.faceOccluderMat) {
+      gsap.killTweensOf(this.faceOccluderMat);
+      gsap.to(this.faceOccluderMat, { opacity: 0.85, duration: 1.2, ease: 'power2.out' });
+    }
   }
 
   private hideFace() {
     this.facePendingShow = false;
     if (!this.faceGroup) return;
     gsap.killTweensOf(this.faceOpacity);
+    if (this.faceOccluderMat) {
+      gsap.killTweensOf(this.faceOccluderMat);
+      gsap.to(this.faceOccluderMat, { opacity: 0, duration: 0.35, ease: 'power2.in' });
+    }
     gsap.to(this.faceOpacity, {
       value: 0,
       duration: 0.35,
@@ -552,20 +588,19 @@ export class RoomMatrix {
   private spawnHologram() {
     if (this.holo) return;
     this.ensureHoloLayer();
-    this.holo = new AdminHologram(() => {
-      // the button and Esc converge on the same path: ask the OS to dismiss,
-      // it exits, posts matrixExit back, and everything restores in order
-      this.experience.monitorScreen?.iframeEl?.contentWindow?.postMessage(
-        { type: 'matrixDismiss' },
-        '*'
-      );
-    });
-    // chrome (ADMIN title + button) wraps the face position, left of the monitor
+    this.holo = new AdminHologram();
+    // chrome (the ADMIN title) wraps the face position, left of the monitor
     this.holo.object.position.copy(this.faceBasePos);
     this.holoScene!.add(this.holo.object);
     this.holoActive = true;
     this.showFace();
-    this.holo.present(this.finaleLines);
+    // each spoken line drives the OS typewriter; the end starts the countdown
+    const iframeWin = () => this.experience.monitorScreen?.iframeEl?.contentWindow;
+    this.holo.present(
+      this.finaleLines,
+      (i) => { try { iframeWin()?.postMessage({ type: 'adminLineStart', index: i }, '*'); } catch {} },
+      () => { try { iframeWin()?.postMessage({ type: 'adminSpeechDone' }, '*'); } catch {} }
+    );
   }
 
   private removeHologram() {
@@ -746,6 +781,7 @@ export class RoomMatrix {
         if (child instanceof THREE.Mesh) child.geometry.dispose();
       });
       this.faceMat?.dispose();
+      this.faceOccluderMat?.dispose();
       this.faceGroup = undefined;
     }
     document.getElementById('shell-glitch-svg')?.remove();

@@ -81,6 +81,14 @@ export const OS: React.FC = () => {
     if (matrixTimer.current) clearTimeout(matrixTimer.current);
   }, []);
 
+  // dev-only hooks for automated verification (mirrors the shell's __roomMatrix)
+  useEffect(() => {
+    if ((import.meta as any).env?.DEV) {
+      (window as any).__osDebug = { enterMatrix, ascendToFinale, exitMatrix };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Escape pressed on the 3D room side posts 'matrixDismiss' back to the OS —
   // dismiss the takeover (a ref keeps the handler pointed at the latest closure).
   const exitMatrixRef = useRef(exitMatrix);

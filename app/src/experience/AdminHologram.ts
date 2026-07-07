@@ -1,15 +1,18 @@
 import { CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
 
 // The Admin's presence layer — CSS3D chrome around the WebGL face hologram
-// (the face mesh itself lives in RoomMatrix): "ADMIN" floating over the head,
-// and the way-out button under it. The message is typed on the OS screen and
-// SPOKEN here: browser TTS pitched deep and slow, over a synthesized
-// "transmission bed" (sub hum + detuned shimmer + data chirps — WebAudio, no
-// files). The button reveals when the speech ends. No image/audio assets.
+// (the face mesh lives in RoomMatrix): a big "ADMIN" floating over the head.
+// The message is typed on the OS screen and SPOKEN here, line by line, with
+// callbacks per line so the OS typewriter advances in step with the voice.
+// Voice: smoothest available (neural "Natural" voices in Edge → Google voices
+// in Chrome → any English), natural register — AI-smooth, not robot-growl —
+// over a synthesized "transmission bed" (sub hum + carrier shimmer + data
+// chirps; WebAudio, no files). The way back is the OS-side vortex, so this
+// layer has no button anymore. All text is our own.
 
 const HOLO_CSS = `
 .admin-holo {
-  width: 760px;
+  width: 980px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -48,40 +51,22 @@ const HOLO_CSS = `
 }
 .admin-holo-title {
   margin: 0;
-  font-size: 64px;
+  font-size: 96px;
   font-weight: bold;
-  letter-spacing: 22px;
-  color: #7fffab;
-  text-shadow: 0 0 20px rgba(0, 255, 65, 0.95), 0 0 48px rgba(0, 255, 65, 0.55);
+  letter-spacing: 26px;
+  color: #b4ffcf;
+  text-shadow: 0 0 22px rgba(0, 255, 65, 1), 0 0 60px rgba(0, 255, 65, 0.6);
   animation: holo-title-pulse 2.4s ease-in-out infinite;
 }
 @keyframes holo-title-pulse {
-  0%, 100% { text-shadow: 0 0 16px rgba(0,255,65,0.85), 0 0 38px rgba(0,255,65,0.45); }
-  50% { text-shadow: 0 0 30px rgba(0,255,65,1), 0 0 70px rgba(0,255,65,0.65); }
+  0%, 100% { text-shadow: 0 0 18px rgba(0,255,65,0.9), 0 0 46px rgba(0,255,65,0.5); }
+  50% { text-shadow: 0 0 34px rgba(0,255,65,1), 0 0 84px rgba(0,255,65,0.7); }
 }
 /* transparent window the WebGL face shows through */
 .admin-holo-gap {
-  height: 780px;
+  height: 820px;
   pointer-events: none;
 }
-.admin-holo-btn {
-  padding: 18px 38px;
-  background: rgba(0, 20, 0, 0.85);
-  border: 1px solid #00ff41;
-  color: #00ff41;
-  font-family: 'Courier New', monospace;
-  font-size: 28px;
-  font-weight: bold;
-  letter-spacing: 3px;
-  cursor: pointer;
-  pointer-events: auto;
-  opacity: 0;
-  transition: opacity 0.7s ease, background 0.15s ease, color 0.15s ease;
-  text-shadow: 0 0 10px rgba(0, 255, 65, 0.9);
-  box-shadow: 0 0 22px rgba(0, 255, 65, 0.35), inset 0 0 12px rgba(0, 255, 65, 0.15);
-}
-.admin-holo-btn--on { opacity: 1; animation: holo-title-pulse 1.6s ease-in-out infinite; }
-.admin-holo-btn:hover { background: #00ff41; color: #000; }
 `;
 
 // ── synthesized transmission bed (parent-side WebAudio, no assets) ──────────
@@ -96,10 +81,9 @@ function startTransmissionBed(): () => void {
 
     const master = c.createGain();
     master.gain.setValueAtTime(0.0001, t);
-    master.gain.exponentialRampToValueAtTime(0.05, t + 1.2);
+    master.gain.exponentialRampToValueAtTime(0.045, t + 1.2);
     master.connect(c.destination);
 
-    // deep carrier hum
     const sub = c.createOscillator();
     sub.type = 'sine';
     sub.frequency.value = 46;
@@ -108,7 +92,6 @@ function startTransmissionBed(): () => void {
     sub.connect(subGain).connect(master);
     sub.start(t);
 
-    // detuned shimmer pair (slow beat — "signal carrier")
     const s1 = c.createOscillator();
     s1.type = 'sine';
     s1.frequency.value = 208;
@@ -122,7 +105,6 @@ function startTransmissionBed(): () => void {
     sGain.connect(master);
     s1.start(t); s2.start(t);
 
-    // sparse data chirps
     const chirps = window.setInterval(() => {
       if (Math.random() < 0.35) return;
       const now = c.currentTime;
@@ -162,14 +144,43 @@ function startTransmissionBed(): () => void {
   }
 }
 
+/** Smoothest available English voice: neural > Google > named modern > any. */
+function pickVoice(): SpeechSynthesisVoice | undefined {
+  const vs = window.speechSynthesis.getVoices();
+  const en = vs.filter((v) => /^en([-_]|$)/i.test(v.lang));
+  return (
+    en.find((v) => /natural/i.test(v.name)) ||
+    en.find((v) => /neural|online/i.test(v.name)) ||
+    en.find((v) => /google/i.test(v.name)) ||
+    en.find((v) => /aria|jenny|guy|ryan|libby|sonia/i.test(v.name)) ||
+    en[0] ||
+    vs[0]
+  );
+}
+
+/** getVoices() populates async in some browsers — wait briefly if empty. */
+function voicesReady(): Promise<void> {
+  return new Promise((resolve) => {
+    if (!('speechSynthesis' in window)) return resolve();
+    if (window.speechSynthesis.getVoices().length > 0) return resolve();
+    const done = () => { cleanup(); resolve(); };
+    const cleanup = () => {
+      window.speechSynthesis.removeEventListener('voiceschanged', done);
+      clearTimeout(timer);
+    };
+    window.speechSynthesis.addEventListener('voiceschanged', done);
+    const timer = window.setTimeout(done, 1200);
+  });
+}
+
 export class AdminHologram {
   public object: CSS3DObject;
   private el: HTMLDivElement;
-  private btnEl!: HTMLButtonElement;
   private timers: number[] = [];
   private stopBed: (() => void) | null = null;
+  private disposed = false;
 
-  constructor(onDismiss: () => void) {
+  constructor() {
     if (!document.getElementById('admin-holo-css')) {
       const style = document.createElement('style');
       style.id = 'admin-holo-css';
@@ -183,60 +194,72 @@ export class AdminHologram {
     const inner = document.createElement('div');
     inner.className = 'admin-holo-inner';
 
-    const title = document.createElement('p');
+    // a <div>, deliberately: the shell's global `#experience-container p`
+    // rule (ID specificity) would override our class styles on a <p> and
+    // shrink the title to 16px white — exactly the unreadable-ADMIN bug.
+    const title = document.createElement('div');
     title.className = 'admin-holo-title';
     title.textContent = 'ADMIN';
 
     const gap = document.createElement('div');
     gap.className = 'admin-holo-gap';
 
-    this.btnEl = document.createElement('button');
-    this.btnEl.className = 'admin-holo-btn';
-    this.btnEl.textContent = '[ RE-ENTER THE SIMULATION ]';
-    this.btnEl.addEventListener('mousedown', onDismiss);
-
     inner.appendChild(title);
     inner.appendChild(gap);
-    inner.appendChild(this.btnEl);
     this.el.appendChild(inner);
 
     this.object = new CSS3DObject(this.el);
   }
 
   /**
-   * The Admin speaks (deep, slow browser TTS over the transmission bed); the
-   * way out reveals when the speech ends. Swap for a recorded clip later by
-   * replacing the utterance with an <audio>/WebAudio source here.
+   * Speaks the address line by line. `onLineStart(i)` fires as each line
+   * begins (the OS types that line in step); `onDone()` fires after the last
+   * line (the OS starts the countdown). Works without TTS too: lines are then
+   * paced on timers so the experience never stalls.
    */
-  public present(lines: string[]) {
-    this.timers.push(window.setTimeout(() => {
+  public present(lines: string[], onLineStart: (i: number) => void, onDone: () => void) {
+    this.timers.push(window.setTimeout(async () => {
+      if (this.disposed) return;
       this.stopBed = startTransmissionBed();
 
-      if (!('speechSynthesis' in window)) {
-        this.timers.push(window.setTimeout(() => this.revealButton(), 6500));
-        return;
+      const hasTTS = 'speechSynthesis' in window;
+      if (hasTTS) {
+        await voicesReady();
+        if (this.disposed) return;
+        window.speechSynthesis.cancel();
       }
-      const text = lines.filter((l) => l && !l.startsWith('—')).join(' ');
-      const u = new SpeechSynthesisUtterance(text);
-      const voices = window.speechSynthesis.getVoices();
-      const pick =
-        voices.find((v) => /^en/i.test(v.lang) && /david|daniel|george|ryan|guy|male/i.test(v.name)) ||
-        voices.find((v) => /^en/i.test(v.lang));
-      if (pick) u.voice = pick;
-      u.rate = 0.82;   // slower —
-      u.pitch = 0.35;  // — and deeper: transmission from something large
-      u.volume = 1.0;
-      u.onend = () => this.revealButton();
-      u.onerror = () => this.revealButton();
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(u);
-      // safety net: never strand the visitor if speech events go missing
-      this.timers.push(window.setTimeout(() => this.revealButton(), 45000));
-    }, 1100)); // after the flicker-in
-  }
+      const voice = hasTTS ? pickVoice() : undefined;
 
-  private revealButton() {
-    this.btnEl.classList.add('admin-holo-btn--on');
+      let idx = 0;
+      const next = () => {
+        if (this.disposed) return;
+        if (idx >= lines.length) { onDone(); return; }
+        const i = idx++;
+        const text = lines[i];
+        // blanks and the signature are typed, not spoken
+        if (!text || text.startsWith('—') || !hasTTS) {
+          onLineStart(i);
+          const pause = !text ? 380 : 500 + text.length * 52;
+          this.timers.push(window.setTimeout(next, pause));
+          return;
+        }
+        const u = new SpeechSynthesisUtterance(text);
+        if (voice) u.voice = voice;
+        u.rate = 0.95;   // natural pace —
+        u.pitch = 0.9;   // — natural register: smooth AI, not robot growl
+        u.volume = 1.0;
+        u.onstart = () => onLineStart(i);
+        u.onend = () => { this.timers.push(window.setTimeout(next, 200)); };
+        u.onerror = () => { onLineStart(i); this.timers.push(window.setTimeout(next, 400)); };
+        window.speechSynthesis.speak(u);
+      };
+      next();
+
+      // absolute safety net — never strand the visitor before the countdown
+      this.timers.push(window.setTimeout(() => {
+        if (!this.disposed && idx < lines.length) { idx = lines.length; onDone(); }
+      }, 75000));
+    }, 1100)); // after the flicker-in
   }
 
   private stopAudio() {
@@ -247,6 +270,7 @@ export class AdminHologram {
 
   /** Flicker-out, then resolve so the owner can remove the object. */
   public dismiss(onGone: () => void) {
+    this.disposed = true;
     this.stopAudio();
     this.el.classList.remove('admin-holo--in');
     this.el.classList.add('admin-holo--out');
@@ -254,10 +278,10 @@ export class AdminHologram {
   }
 
   public destroy() {
+    this.disposed = true;
     this.stopAudio();
     this.timers.forEach(clearTimeout);
     this.timers = [];
-    this.btnEl.replaceWith(this.btnEl.cloneNode(true)); // drop listener
     this.el.remove();
   }
 }
