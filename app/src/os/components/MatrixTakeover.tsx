@@ -6,6 +6,8 @@ import {
   startMatrixMusic,
   startMatrixFinale,
   playFinaleRiser,
+  playCountdownTick,
+  playShatterCrash,
   playReenterZap,
 } from './matrixAudio';
 
@@ -132,7 +134,13 @@ const MatrixRainFull: React.FC = () => {
   return <canvas ref={canvasRef} className="mtx-rain" />;
 };
 
-/** The green vortex — after the break, the single way back to the simulation. */
+/**
+ * The green vortex — after the break, the single way back to the simulation.
+ * Galaxy-style: three spiral arms of glowing particles with motion trails
+ * (fade-instead-of-clear + additive compositing), a pulsing white-green core,
+ * and a breathing event-horizon ring. The whole canvas also slow-rotates in
+ * CSS for extra depth.
+ */
 const VortexPortal: React.FC<{ onEnter: () => void }> = ({ onEnter }) => {
   const ref = useRef<HTMLCanvasElement>(null);
 
@@ -142,39 +150,54 @@ const VortexPortal: React.FC<{ onEnter: () => void }> = ({ onEnter }) => {
     const ctx = canvas.getContext('2d')!;
     const S = canvas.width;
     const c = S / 2;
-    const parts = new Array(230).fill(0).map(() => ({
-      a: Math.random() * Math.PI * 2,
-      r: 20 + Math.random() * (c - 24),
-    }));
+    const ARMS = 3;
+    const parts = new Array(340).fill(0).map(() => {
+      const arm = (Math.random() * ARMS) | 0;
+      return {
+        a: (arm / ARMS) * Math.PI * 2 + Math.random() * 0.9, // clustered per arm
+        r: 24 + Math.random() * (c - 30),
+        s: 0.6 + Math.random() * 1.4,
+      };
+    });
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, S, S); // opaque base so trails can fade
     let raf = 0;
     const frame = () => {
       raf = requestAnimationFrame(frame);
-      ctx.clearRect(0, 0, S, S);
-      // pulsing core
+      // motion trails: fade the last frame instead of clearing it
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+      ctx.fillRect(0, 0, S, S);
+      ctx.globalCompositeOperation = 'lighter';
       const t = performance.now() * 0.001;
-      const pulse = 10 + Math.sin(t * 2.4) * 3;
-      const grad = ctx.createRadialGradient(c, c, 0, c, c, pulse * 3);
-      grad.addColorStop(0, 'rgba(190, 255, 215, 0.95)');
+      // pulsing core
+      const pulse = 16 + Math.sin(t * 2.2) * 5;
+      const grad = ctx.createRadialGradient(c, c, 0, c, c, pulse * 4);
+      grad.addColorStop(0, 'rgba(210, 255, 228, 1)');
+      grad.addColorStop(0.35, 'rgba(0, 255, 65, 0.5)');
       grad.addColorStop(1, 'rgba(0, 255, 65, 0)');
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.arc(c, c, pulse * 3, 0, Math.PI * 2);
+      ctx.arc(c, c, pulse * 4, 0, Math.PI * 2);
       ctx.fill();
-      // spiral inflow
-      ctx.shadowColor = '#00ff41';
-      ctx.shadowBlur = 10;
+      // breathing event-horizon ring
+      ctx.strokeStyle = `rgba(0, 255, 65, ${(0.25 + 0.15 * Math.sin(t * 3.1)).toFixed(2)})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(c, c, c - 12 + Math.sin(t * 1.7) * 4, 0, Math.PI * 2);
+      ctx.stroke();
+      // spiral arms spinning inward
       for (const p of parts) {
-        p.a += 0.028 + (c - p.r) * 0.00055;
-        p.r -= 0.5;
-        if (p.r < 14) {
-          p.r = c - 24 + Math.random() * 16;
-          p.a = Math.random() * Math.PI * 2;
-        }
-        const x = c + Math.cos(p.a) * p.r;
-        const y = c + Math.sin(p.a) * p.r * 0.92;
+        p.a += (0.022 + (c - p.r) * 0.0007) * p.s;
+        p.r -= 0.55 * p.s;
+        if (p.r < 12) p.r = c - 26 + Math.random() * 14;
+        const wobble = Math.sin(p.a * 3 + t) * 2;
+        const x = c + Math.cos(p.a) * (p.r + wobble);
+        const y = c + Math.sin(p.a) * (p.r + wobble) * 0.9;
         const b = 1 - p.r / c;
-        ctx.fillStyle = `rgba(${40 + b * 160 | 0}, 255, ${90 + b * 120 | 0}, ${(0.25 + b * 0.75).toFixed(2)})`;
-        ctx.fillRect(x, y, 1.6 + b * 2.2, 1.6 + b * 2.2);
+        const size = 1.2 + b * 3.2;
+        ctx.fillStyle = `rgba(${(60 + b * 170) | 0}, 255, ${(110 + b * 130) | 0}, ${(0.2 + b * 0.8).toFixed(2)})`;
+        ctx.fillRect(x, y, size, size);
       }
     };
     raf = requestAnimationFrame(frame);
@@ -183,7 +206,7 @@ const VortexPortal: React.FC<{ onEnter: () => void }> = ({ onEnter }) => {
 
   return (
     <div className="mtx-vortex-wrap" onMouseDown={onEnter}>
-      <canvas ref={ref} width={380} height={380} className="mtx-vortex" />
+      <canvas ref={ref} width={520} height={520} className="mtx-vortex" />
       <p className="mtx-vortex-hint">[ THE WAY BACK ]</p>
     </div>
   );
@@ -197,30 +220,34 @@ const ShatterOverlay: React.FC<{ vortex: boolean; onVortex: () => void }> = ({
   const crackRef = useRef<HTMLCanvasElement>(null);
   const [fly, setFly] = useState(false);
 
-  // shard geometry: a jittered 4×4 grid of jagged quads, precomputed once
+  // shard geometry: a jittered 5×5 grid of jagged quads, precomputed once
   const shards = useMemo(() => {
     const list: { key: number; base: React.CSSProperties; fly: React.CSSProperties }[] = [];
-    const COLS = 4;
-    const ROWS = 4;
+    const COLS = 5;
+    const ROWS = 5;
     for (let r = 0; r < ROWS; r++) {
       for (let col = 0; col < COLS; col++) {
-        const j = () => 6 - Math.random() * 12; // % jitter on each corner
+        const j = () => 9 - Math.random() * 18; // % jitter on each corner
         const clip = `polygon(${j()}% ${j()}%, ${100 + j()}% ${j()}%, ${100 + j()}% ${100 + j()}%, ${j()}% ${100 + j()}%)`;
-        const dx = (col - 1.5) * (120 + Math.random() * 260);
-        const dy = 320 + Math.random() * 640;
-        const rot = (Math.random() - 0.5) * 150;
+        const dx = (col - 2) * (150 + Math.random() * 320);
+        const dy = 380 + Math.random() * 780;
+        const rx = (Math.random() - 0.5).toFixed(2);
+        const ry = (Math.random() - 0.5).toFixed(2);
+        const rot = ((Math.random() - 0.5) * 260) | 0;
         list.push({
           key: r * COLS + col,
           base: {
-            left: `${col * 25}%`,
-            top: `${r * 25}%`,
-            width: '25%',
-            height: '25%',
+            left: `${col * 20}%`,
+            top: `${r * 20}%`,
+            width: '20%',
+            height: '20%',
             clipPath: clip,
-            transitionDelay: `${(Math.random() * 260) | 0}ms`,
+            transitionDelay: `${(Math.random() * 380) | 0}ms`,
+            transitionDuration: `${(800 + Math.random() * 600) | 0}ms`,
           },
           fly: {
-            transform: `translate(${dx | 0}px, ${dy | 0}px) rotate(${rot | 0}deg)`,
+            // tumbling in 3D, shrinking as they fall
+            transform: `translate(${dx | 0}px, ${dy | 0}px) rotate3d(${rx}, ${ry}, 1, ${rot}deg) scale(0.72)`,
             opacity: 0,
           },
         });
@@ -275,7 +302,8 @@ const ShatterOverlay: React.FC<{ vortex: boolean; onVortex: () => void }> = ({
   }, []);
 
   return (
-    <div className="mtx-shatter">
+    <div className="mtx-shatter mtx-shatter--shake">
+      <div className="mtx-break-flash" />
       {shards.map((s) => (
         <div
           key={s.key}
@@ -370,15 +398,34 @@ const MatrixScreen: React.FC<{
     let ch = 0;
     let curLine = -1;
     let finished = false;
+    // pace each line's typing to its estimated SPEECH duration so text and
+    // voice advance together (≈2.4 words/sec at utterance rate 0.95)
+    let pace = 30;
+    let budget = 0;
+    const paceFor = (line: string) => {
+      if (!line) return 30;
+      const words = Math.max(1, line.trim().split(/\s+/).length);
+      const estMs = (words / 2.4) * 1000;
+      return Math.min(95, Math.max(22, estMs / Math.max(line.length, 1)));
+    };
     const iv = window.setInterval(() => {
       if (selfModeRef.current || finished) return;
       const tgt = extTargetRef.current;
       if (tgt < 0) return;
       // everything before the line being spoken is fully revealed
       for (let i = 0; i < Math.min(tgt, lines.length); i++) acc[i] = lines[i];
-      if (curLine !== tgt) { curLine = tgt; ch = acc[tgt]?.length ?? 0; }
+      if (curLine !== tgt) {
+        curLine = tgt;
+        ch = acc[tgt]?.length ?? 0;
+        pace = paceFor(lines[tgt] ?? '');
+        budget = 0;
+      }
       if (tgt < lines.length && ch < lines[tgt].length) {
-        ch++;
+        budget += 30 / pace;
+        while (budget >= 1 && ch < lines[tgt].length) {
+          ch++;
+          budget--;
+        }
         acc[tgt] = lines[tgt].slice(0, ch);
       }
       if (extDoneRef.current) {
@@ -417,6 +464,7 @@ const MatrixScreen: React.FC<{
   useEffect(() => {
     if (finaleStage !== 'countdown') return;
     setCount(5);
+    playCountdownTick(5);
     const iv = window.setInterval(() => {
       setCount((c) => {
         if (c <= 1) {
@@ -424,6 +472,7 @@ const MatrixScreen: React.FC<{
           setFinaleStage('shatter');
           return 0;
         }
+        playCountdownTick(c - 1);
         return c - 1;
       });
     }, 1000);
@@ -432,6 +481,7 @@ const MatrixScreen: React.FC<{
 
   useEffect(() => {
     if (finaleStage !== 'shatter') return;
+    playShatterCrash();
     const t = setTimeout(() => setFinaleStage('vortex'), 1500);
     return () => clearTimeout(t);
   }, [finaleStage]);

@@ -970,6 +970,24 @@ html, body, #root {
   height: 100%;
   pointer-events: none;
 }
+/* impact shake + white-green flash the instant the screen breaks */
+.mtx-shatter--shake { animation: mtx-screen-shake 0.5s steps(2) 1; }
+@keyframes mtx-screen-shake {
+  0% { transform: translate(9px, -6px); }
+  25% { transform: translate(-8px, 5px); }
+  50% { transform: translate(6px, 4px); }
+  75% { transform: translate(-5px, -4px); }
+  100% { transform: translate(0, 0); }
+}
+.mtx-break-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, rgba(230, 255, 240, 0.95) 0%, rgba(0, 255, 65, 0.5) 45%, rgba(0, 0, 0, 0) 75%);
+  animation: mtx-break-flash 0.3s ease-out both;
+  pointer-events: none;
+  z-index: 2;
+}
+@keyframes mtx-break-flash { from { opacity: 1; } to { opacity: 0; } }
 
 /* the vortex — the single way back */
 .mtx-vortex-wrap {
@@ -982,12 +1000,18 @@ html, body, #root {
   align-items: center;
   cursor: pointer;
   animation: mtx-vortex-in 1.4s ease-out both;
+  z-index: 3;
 }
 @keyframes mtx-vortex-in {
   from { opacity: 0; transform: translate(-50%, -50%) scale(0.55); }
   to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
-.mtx-vortex { display: block; }
+.mtx-vortex {
+  display: block;
+  border-radius: 50%;
+  animation: mtx-vortex-spin 14s linear infinite;
+}
+@keyframes mtx-vortex-spin { to { transform: rotate(360deg); } }
 .mtx-vortex-wrap:hover .mtx-vortex { filter: brightness(1.35); }
 .mtx-vortex-hint {
   margin: 6px 0 0;

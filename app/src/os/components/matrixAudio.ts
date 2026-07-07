@@ -502,6 +502,84 @@ export function startMatrixFinale(): () => void {
   };
 }
 
+/** Countdown blip — one per number; the final one hits harder. */
+export function playCountdownTick(n: number): void {
+  const c = ensureCtx();
+  const t = c.currentTime;
+  const final = n <= 1;
+
+  const o = c.createOscillator();
+  o.type = 'square';
+  o.frequency.value = final ? 1180 : 880;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(final ? 0.13 : 0.085, t + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + (final ? 0.3 : 0.12));
+  o.connect(g).connect(c.destination);
+  o.start(t); o.stop(t + 0.32);
+  o.onended = () => { o.disconnect(); g.disconnect(); };
+
+  // sub thump under each tick
+  const s = c.createOscillator();
+  s.type = 'sine';
+  s.frequency.setValueAtTime(150, t);
+  s.frequency.exponentialRampToValueAtTime(48, t + 0.16);
+  const sg = c.createGain();
+  sg.gain.setValueAtTime(0.0001, t);
+  sg.gain.exponentialRampToValueAtTime(0.11, t + 0.01);
+  sg.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+  s.connect(sg).connect(c.destination);
+  s.start(t); s.stop(t + 0.26);
+  s.onended = () => { s.disconnect(); sg.disconnect(); };
+}
+
+/** The screen breaks: bright glass burst + low body thump + shard tinkles. */
+export function playShatterCrash(): void {
+  const c = ensureCtx();
+  const t = c.currentTime;
+
+  // main crash burst
+  const src = c.createBufferSource();
+  src.buffer = noiseBuffer(c, 0.7);
+  const hp = c.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 2600;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.26, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+  src.connect(hp).connect(g).connect(c.destination);
+  src.start(t);
+  src.onended = () => { src.disconnect(); hp.disconnect(); g.disconnect(); };
+
+  // low body thump
+  const imp = c.createOscillator();
+  imp.type = 'sine';
+  imp.frequency.setValueAtTime(95, t);
+  imp.frequency.exponentialRampToValueAtTime(30, t + 0.4);
+  const ig = c.createGain();
+  ig.gain.setValueAtTime(0.0001, t);
+  ig.gain.exponentialRampToValueAtTime(0.2, t + 0.012);
+  ig.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+  imp.connect(ig).connect(c.destination);
+  imp.start(t); imp.stop(t + 0.75);
+  imp.onended = () => { imp.disconnect(); ig.disconnect(); };
+
+  // falling shards: staggered high pings
+  for (let i = 0; i < 10; i++) {
+    const st = t + 0.05 + Math.random() * 0.5;
+    const o = c.createOscillator();
+    o.type = 'triangle';
+    o.frequency.value = 1800 + Math.random() * 3800;
+    const og = c.createGain();
+    og.gain.setValueAtTime(0.0001, st);
+    og.gain.exponentialRampToValueAtTime(0.04 + Math.random() * 0.05, st + 0.004);
+    og.gain.exponentialRampToValueAtTime(0.0001, st + 0.12 + Math.random() * 0.16);
+    o.connect(og).connect(c.destination);
+    o.start(st); o.stop(st + 0.32);
+    o.onended = () => { o.disconnect(); og.disconnect(); };
+  }
+}
+
 /** Short rising zap + static tick when re-entering the desktop. */
 export function playReenterZap(): void {
   const c = ensureCtx();

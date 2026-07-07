@@ -144,15 +144,21 @@ function startTransmissionBed(): () => void {
   }
 }
 
-/** Smoothest available English voice: neural > Google > named modern > any. */
+/** Smoothest available MALE English voice: neural > Google > named > any male. */
+const MALE_NAMES = /david|mark|guy|andrew|brian|christopher|eric|roger|steffan|ryan|george|james|liam|noah|thomas|\bmale\b/i;
+const FEMALE_NAMES = /aria|jenny|zira|libby|sonia|michelle|emma|ava|natasha|clara|hazel|susan|linda|heather|catherine|\bfemale\b/i;
+
 function pickVoice(): SpeechSynthesisVoice | undefined {
   const vs = window.speechSynthesis.getVoices();
   const en = vs.filter((v) => /^en([-_]|$)/i.test(v.lang));
+  const maleEn = en.filter((v) => MALE_NAMES.test(v.name) && !FEMALE_NAMES.test(v.name));
   return (
-    en.find((v) => /natural/i.test(v.name)) ||
-    en.find((v) => /neural|online/i.test(v.name)) ||
-    en.find((v) => /google/i.test(v.name)) ||
-    en.find((v) => /aria|jenny|guy|ryan|libby|sonia/i.test(v.name)) ||
+    maleEn.find((v) => /natural/i.test(v.name)) ||
+    maleEn.find((v) => /neural|online/i.test(v.name)) ||
+    maleEn.find((v) => /google/i.test(v.name)) ||
+    maleEn[0] ||
+    en.find((v) => /natural/i.test(v.name) && !FEMALE_NAMES.test(v.name)) ||
+    en.find((v) => !FEMALE_NAMES.test(v.name)) ||
     en[0] ||
     vs[0]
   );
@@ -248,9 +254,21 @@ export class AdminHologram {
         u.rate = 0.95;   // natural pace —
         u.pitch = 0.9;   // — natural register: smooth AI, not robot growl
         u.volume = 1.0;
-        u.onstart = () => onLineStart(i);
-        u.onend = () => { this.timers.push(window.setTimeout(next, 200)); };
-        u.onerror = () => { onLineStart(i); this.timers.push(window.setTimeout(next, 400)); };
+        // advance exactly once per line — onend when it fires, otherwise a
+        // duration-estimate watchdog (some voices never deliver end events,
+        // which used to stall the drive and desync voice from typing)
+        let advanced = false;
+        const advance = (delay: number) => {
+          if (advanced || this.disposed) return;
+          advanced = true;
+          this.timers.push(window.setTimeout(next, delay));
+        };
+        u.onend = () => advance(200);
+        u.onerror = () => advance(350);
+        // drive the typing NOW — onstart is unreliable for some voices
+        onLineStart(i);
+        const words = Math.max(1, text.trim().split(/\s+/).length);
+        this.timers.push(window.setTimeout(() => advance(0), 700 + (words / 2.4) * 1000 + 900));
         window.speechSynthesis.speak(u);
       };
       next();
