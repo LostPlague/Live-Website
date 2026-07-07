@@ -129,6 +129,13 @@ const MatrixScreen: React.FC<{
   const [btnOn, setBtnOn] = useState(false);
   const [attempt, setAttempt] = useState('');
   const [denied, setDenied] = useState(false);
+  const attemptRef = useRef('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const setAttemptBoth = (v: string) => {
+    attemptRef.current = v;
+    setAttempt(v);
+  };
 
   // typewriter message
   useEffect(() => {
@@ -164,7 +171,7 @@ const MatrixScreen: React.FC<{
   }, [level]);
 
   const tryFinal = () => {
-    if (A3.test(attempt.trim())) {
+    if (A3.test(attemptRef.current.trim())) {
       playFinaleRiser(); // fire inside the click gesture; the room syncs to it
       onFinalUnlock();
     } else {
@@ -173,8 +180,37 @@ const MatrixScreen: React.FC<{
     }
   };
 
+  // Type-anywhere net: DOM focus follows clicks, not hover — after a camera
+  // trip the iframe/input can silently lose focus and keystrokes go nowhere.
+  // On the final question, ANY key lands in the answer field regardless.
+  useEffect(() => {
+    if (level !== 2 || !typedDone) return;
+    const onKey = (e: KeyboardEvent) => {
+      const el = inputRef.current;
+      if (!el || document.activeElement === el) return;
+      if (e.key === 'Enter') { tryFinal(); return; }
+      if (e.key === 'Backspace') {
+        e.preventDefault();
+        setAttemptBoth(attemptRef.current.slice(0, -1));
+        el.focus();
+        return;
+      }
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setAttemptBoth(attemptRef.current + e.key);
+        el.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [level, typedDone]);
+
   return (
-    <div className={`mtx-screen${collapsing ? ' mtx-screen--off' : ''}`}>
+    <div
+      className={`mtx-screen${collapsing ? ' mtx-screen--off' : ''}`}
+      onMouseDown={() => inputRef.current?.focus()}
+    >
       <MatrixRainFull />
       <div className="mtx-message">
         {typed.map((l, i) => (
@@ -185,11 +221,12 @@ const MatrixScreen: React.FC<{
             <div className="mtx-answer-row">
               <span className="mtx-line">{'>'}</span>
               <input
+                ref={inputRef}
                 className="mtx-input"
                 type="text"
                 autoFocus
                 value={attempt}
-                onChange={(e) => setAttempt(e.target.value)}
+                onChange={(e) => setAttemptBoth(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') tryFinal(); }}
               />
               <button className="mtx-answer-btn" onMouseDown={tryFinal}>

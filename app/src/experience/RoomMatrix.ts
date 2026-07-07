@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import gsap from 'gsap';
+import { CSS3DRenderer } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
 import { Experience } from './Experience';
 import { AdminHologram } from './AdminHologram';
 
@@ -200,6 +201,12 @@ export class RoomMatrix {
   private finaleStarted = false;
   private finaleTimers: number[] = [];
   private shellGlitchRaf = 0;
+  // The main CSS3D layer (#css, z 5) sits BEHIND the WebGL canvas (z 10) — the
+  // monitor iframe is only visible through a punch-through mesh. The hologram
+  // gets its own CSS3D pass on a layer ABOVE the canvas (z 14, under the grain
+  // at 15) so it truly floats over the coded room.
+  private holoRenderer?: CSS3DRenderer;
+  private holoScene?: THREE.Scene;
 
   private active = false;
   private camPull = 0;   // current pull (0..1), frame-lerped toward camTarget
@@ -376,6 +383,7 @@ export class RoomMatrix {
     if (this.active) return;
     this.active = true;
     this.camTarget = 1;
+    this.experience.camera.matrixLock = true; // OS + desk views only
     if (this.points) this.points.visible = true;
     this.experience.scene.fog = this.experience.scene.fog || new THREE.FogExp2(0x001a05, 0);
 
@@ -401,8 +409,29 @@ export class RoomMatrix {
     this.finaleTimers.push(window.setTimeout(() => this.spawnHologram(), 2700));
   }
 
+  /** Lazy top-layer CSS3D pass for the hologram (above the WebGL canvas). */
+  private ensureHoloLayer() {
+    if (this.holoRenderer) return;
+    this.holoScene = new THREE.Scene();
+    this.holoRenderer = new CSS3DRenderer();
+    this.holoRenderer.setSize(window.innerWidth, window.innerHeight);
+    const el = this.holoRenderer.domElement;
+    el.style.position = 'absolute';
+    el.style.top = '0';
+    el.style.left = '0';
+    el.style.zIndex = '14';          // above #webgl (10), under the grain (15)
+    el.style.pointerEvents = 'none'; // only the hologram's button re-enables
+    this.experience.options.container.appendChild(el);
+    window.addEventListener('resize', this.onHoloResize);
+  }
+
+  private onHoloResize = () => {
+    this.holoRenderer?.setSize(window.innerWidth, window.innerHeight);
+  };
+
   private spawnHologram() {
     if (this.holo) return;
+    this.ensureHoloLayer();
     this.holo = new AdminHologram(() => {
       // the button and Esc converge on the same path: ask the OS to dismiss,
       // it exits, posts matrixExit back, and everything restores in order
@@ -411,8 +440,10 @@ export class RoomMatrix {
         '*'
       );
     });
-    this.holo.object.position.set(0, 2080, 300);
-    this.experience.cssScene.add(this.holo.object);
+    // bigger, and standing over the LEFT side of the desk
+    this.holo.object.position.set(-1000, 1520, 320);
+    this.holo.object.scale.setScalar(1.15);
+    this.holoScene!.add(this.holo.object);
     this.holoActive = true;
     this.holo.typeMessage(ADMIN_LINES);
   }
@@ -423,7 +454,7 @@ export class RoomMatrix {
     this.holo = null;
     this.holoActive = false;
     holo.dismiss(() => {
-      this.experience.cssScene.remove(holo.object);
+      this.holoScene?.remove(holo.object);
       holo.destroy();
     });
   }
@@ -514,6 +545,7 @@ export class RoomMatrix {
       ease: 'power2.in',
       onComplete: () => {
         this.active = false;
+        this.experience.camera.matrixLock = false;
         if (this.points) this.points.visible = false;
         this.experience.scene.fog = null;
       },
@@ -535,23 +567,30 @@ export class RoomMatrix {
     }
 
     // hover-aware pull: mouse on the CRT → glide back in (so the screen/OS is
-    // usable mid-matrix); mouse off → drift back out to admire the coded room.
-    // While the Admin hologram is up the camera stays back so he's readable.
+    // usable mid-matrix, hologram included); mouse off → drift back out.
     // Not active → always return to 0 (otherwise exit leaves the camera out).
     this.camTarget = this.active
-      ? (this.holoActive ? 1 : (this.experience.monitorScreen?.isMouseOnScreen ? 0 : 1))
+      ? (this.experience.monitorScreen?.isMouseOnScreen ? 0 : 1)
       : 0;
     this.camPull += (this.camTarget - this.camPull) * Math.min(1, dt * 2.6);
     if (Math.abs(this.camPull - this.camTarget) < 0.002) this.camPull = this.camTarget;
 
-    // camera pull-back: fresh visual offset each frame (never accumulates)
-    if (this.camPull > 0.0001) {
+    // camera pull-back: fresh visual offset each frame (never accumulates).
+    // Only applied in monitor state — in desk view the room is already framed,
+    // and stacking the pull on top gave an unwanted extra-wide view.
+    if (this.camPull > 0.0001 && this.experience.camera.state === 'monitor') {
       const cam = this.experience.camera.instance;
       const tgt = this.experience.camera.target;
       _dir.copy(cam.position).sub(tgt).normalize();
       cam.position.addScaledVector(_dir, this.pullDist * this.camPull);
       cam.position.y += this.pullUp * this.camPull;
       cam.lookAt(tgt);
+    }
+
+    // hologram pass — rendered with the final (pulled) camera so it tracks
+    // the view exactly; runs only while something is in the layer
+    if (this.holoRenderer && this.holoScene && this.holoScene.children.length > 0) {
+      this.holoRenderer.render(this.holoScene, this.experience.camera.instance);
     }
   }
 
@@ -564,10 +603,14 @@ export class RoomMatrix {
     const root = document.getElementById('root');
     if (root) { root.style.filter = ''; root.style.transform = ''; }
     if (this.holo) {
-      this.experience.cssScene.remove(this.holo.object);
+      this.holoScene?.remove(this.holo.object);
       this.holo.destroy();
       this.holo = null;
     }
+    window.removeEventListener('resize', this.onHoloResize);
+    this.holoRenderer?.domElement.remove();
+    this.holoRenderer = undefined;
+    this.holoScene = undefined;
     document.getElementById('shell-glitch-svg')?.remove();
     gsap.killTweensOf(this.uniforms.uProgress);
     gsap.killTweensOf(this.uniforms.uWave);

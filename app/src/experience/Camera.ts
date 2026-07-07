@@ -16,6 +16,8 @@ export class Camera {
   state: 'loading' | 'idle' | 'desk' | 'monitor' | 'orbit' = 'loading';
   userLocked = false;
   freeCam = false;
+  /** While the Matrix finale owns the room, only monitor/desk views exist. */
+  matrixLock = false;
   position = new THREE.Vector3(-35000, 35000, 35000);
   target = new THREE.Vector3(0, -5000, 0);
   mouse = new THREE.Vector2(0, 0);
@@ -70,6 +72,8 @@ export class Camera {
 
   public triggerTransition(target: 'idle' | 'desk' | 'monitor' | 'orbit', durationMs: number = 1000, opts?: { userInitiated?: boolean }) {
     if (this.state === target) return;
+    // Matrix finale: wide/orbit views are off-limits — OS and desk only
+    if (this.matrixLock && (target === 'idle' || target === 'orbit')) return;
 
     // Sticky lock: user-initiated monitor click stays locked; anything else clears it
     if (opts?.userInitiated) {

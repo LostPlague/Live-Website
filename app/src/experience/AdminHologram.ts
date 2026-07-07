@@ -229,7 +229,32 @@ export class AdminHologram {
     this.object = new CSS3DObject(this.el);
   }
 
-  /** Types the message line by line; reveals the button when done. */
+  /**
+   * Speaks the message aloud via the browser's built-in TTS — no audio files.
+   * Deep/slow settings sell the "entity" feel; swap for a recorded clip later
+   * by replacing this method. No-op where speechSynthesis is unavailable.
+   */
+  private speak(lines: string[]) {
+    if (!('speechSynthesis' in window)) return;
+    const text = lines.filter((l) => l && !l.startsWith('—')).join(' ');
+    const u = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    const pick =
+      voices.find((v) => /^en/i.test(v.lang) && /david|daniel|george|ryan|guy|male/i.test(v.name)) ||
+      voices.find((v) => /^en/i.test(v.lang));
+    if (pick) u.voice = pick;
+    u.rate = 0.92;
+    u.pitch = 0.55; // low = ominous
+    u.volume = 0.9;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  }
+
+  private stopSpeaking() {
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  }
+
+  /** Types the message line by line (and speaks it); reveals the button when done. */
   public typeMessage(lines: string[]) {
     let line = 0;
     let ch = 0;
@@ -261,17 +286,22 @@ export class AdminHologram {
         this.timers.push(window.setTimeout(type, 24));
       }
     };
-    this.timers.push(window.setTimeout(type, 1100)); // after the flicker-in
+    this.timers.push(window.setTimeout(() => {
+      this.speak(lines);
+      type();
+    }, 1100)); // after the flicker-in
   }
 
   /** Flicker-out, then resolve so the owner can remove the object. */
   public dismiss(onGone: () => void) {
+    this.stopSpeaking();
     this.el.classList.remove('admin-holo--in');
     this.el.classList.add('admin-holo--out');
     this.timers.push(window.setTimeout(onGone, 470));
   }
 
   public destroy() {
+    this.stopSpeaking();
     this.timers.forEach(clearTimeout);
     this.timers = [];
     this.btnEl.replaceWith(this.btnEl.cloneNode(true)); // drop listener

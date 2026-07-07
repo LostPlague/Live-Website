@@ -57,6 +57,10 @@ export class MonitorScreen {
 
       if (this.inComputer && !this.prevInComputer) {
         this.experience.camera.enterMonitor();
+        // Focus follows clicks, not hover — so after any camera trip the OS
+        // iframe can lose keyboard focus and typing silently goes nowhere
+        // (e.g. the final Matrix question). Hand focus back on hover-enter.
+        try { this.iframeEl?.contentWindow?.focus(); } catch {}
       }
       if (
         !this.inComputer &&
