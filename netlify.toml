@@ -9,6 +9,12 @@
 [build.environment]
   NODE_VERSION = "20"
 
+# Serverless backend for the /admin Control Center: holds the PostHog personal
+# key + admin password server-side and proxies analytics queries. Resolved as
+# app/netlify/functions. (/.netlify/functions/* is exempt from the SPA redirect.)
+[functions]
+  directory = "netlify/functions"
+
 # SPA fallback: serve index.html for every path so React Router owns routing.
 # Without this, deep links like /os and any page refresh would 404.
 [[redirects]]
