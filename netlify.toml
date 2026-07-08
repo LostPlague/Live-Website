@@ -4,6 +4,11 @@
   command = "npm run build" # tsc -b && vite build
   publish = "dist"          # output (resolved as app/dist)
 
+# Pin the Node version so Netlify's build matches a known-good toolchain
+# (Vite 8 needs Node 18+). Prevents version-mismatch build failures.
+[build.environment]
+  NODE_VERSION = "20"
+
 # SPA fallback: serve index.html for every path so React Router owns routing.
 # Without this, deep links like /os and any page refresh would 404.
 [[redirects]]
