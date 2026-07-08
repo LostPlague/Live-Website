@@ -2,6 +2,7 @@ import React from 'react';
 import printer from '../../assets/showcase/printer.gif';
 import Resume from '../../assets/showcase/Mohamed_Tabari_Resume.pdf';
 import type { StyleSheetCSS } from './types';
+import { track } from '../../../analytics';
 
 // Ported verbatim from Henry's components/showcase/ResumeDownload.tsx
 
@@ -15,7 +16,12 @@ const ResumeDownload: React.FC<ResumeDownloadProps> = ({ altText }) => {
       <img style={styles.resumePrinter} alt="" src={printer} />
       <div style={styles.resumeContainerText}>
         <h3>{altText ? altText : 'Looking for my resume?'}</h3>
-        <a rel="noreferrer" target="_blank" href={Resume}>
+        <a
+          rel="noreferrer"
+          target="_blank"
+          href={Resume}
+          onClick={() => track('resume_downloaded', { source: altText || 'showcase' })}
+        >
           <p>Click here to download it!</p>
         </a>
       </div>

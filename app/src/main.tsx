@@ -4,6 +4,9 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import './index.css'
 import { ThreeExperience } from './components/ThreeExperience'
 import { OS } from './os/OS'
+import { initAnalytics } from './analytics'
+
+initAnalytics()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

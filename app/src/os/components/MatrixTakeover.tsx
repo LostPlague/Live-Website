@@ -12,6 +12,7 @@ import {
   BREAK_HIT2,
   playReenterZap,
 } from './matrixAudio';
+import { track } from '../../analytics';
 
 // Full-OS Matrix takeover — STAGE 2 and the gateway to STAGE 3.
 // Phases (driven by OS.tsx):
@@ -802,6 +803,7 @@ const MatrixScreen: React.FC<{
   const tryFinal = () => {
     if (revokedRef.current) return;
     if (A3.test(attemptRef.current.trim())) {
+      track('secret_stage_passed', { stage: 'tokens', order: 3 });
       playFinaleRiser(); // fire inside the click gesture; the room syncs to it
       onFinalUnlock();
       return;
@@ -812,8 +814,10 @@ const MatrixScreen: React.FC<{
     const left = attemptsLeft - 1;
     setAttemptsLeft(left);
     setAttemptBoth('');
+    track('secret_wrong_answer', { stage: 'tokens', attemptsLeft: left });
     if (left <= 0) {
       revokedRef.current = true;
+      track('secret_failed', { stage: 'tokens' });
       setDeniedText('> ACCESS REVOKED. THE MACHINE FORGETS YOU.');
       setTimeout(onReenter, 1600);
       return;

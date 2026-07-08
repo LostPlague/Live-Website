@@ -6,6 +6,7 @@ import Radio from './apps/Radio';
 import SecretFiles from './apps/SecretFiles';
 import { Window } from './components/Window';
 import MatrixTakeover, { type MatrixPhase } from './components/MatrixTakeover';
+import { track, trackAppOpen, trackAppClose, flushOpenApps } from '../analytics';
 import './os.css';
 import windowsStartIcon from './assets/windowsStartIcon.png';
 import volumeOn from './assets/volumeOn.png';
@@ -55,8 +56,11 @@ export const OS: React.FC = () => {
     matrixTimer.current = window.setTimeout(() => setMatrixPhase('matrix'), 2300);
   };
 
-  // final answer correct → stage 3: the room outside falls too
-  const ascendToFinale = () => setMatrixLevel(3);
+  // final answer correct → stage 3: the room outside falls too (funnel end)
+  const ascendToFinale = () => {
+    track('secret_completed');
+    setMatrixLevel(3);
+  };
 
   const exitMatrix = () => {
     if (matrixTimer.current) clearTimeout(matrixTimer.current);
@@ -79,6 +83,13 @@ export const OS: React.FC = () => {
 
   useEffect(() => () => {
     if (matrixTimer.current) clearTimeout(matrixTimer.current);
+  }, []);
+
+  // if the tab closes with apps still open, flush their time-spent durations
+  useEffect(() => {
+    const onLeave = () => flushOpenApps();
+    window.addEventListener('pagehide', onLeave);
+    return () => window.removeEventListener('pagehide', onLeave);
   }, []);
 
   // dev-only hooks for automated verification (mirrors the shell's __roomMatrix)
@@ -187,6 +198,7 @@ export const OS: React.FC = () => {
 
   const openWindow = (key: string, name: string, icon: string, iconImg?: string) => {
     setWindows(prev => {
+      if (!prev[key]) trackAppOpen(key); // count first open, not re-focus
       let max = 0;
       Object.keys(prev).forEach(k => { if (prev[k].zIndex > max) max = prev[k].zIndex; });
       return {
@@ -198,6 +210,7 @@ export const OS: React.FC = () => {
 
   const closeWindow = (key: string) => {
     setWindows(prev => {
+      if (prev[key]) trackAppClose(key);
       const n = { ...prev };
       delete n[key];
       return n;

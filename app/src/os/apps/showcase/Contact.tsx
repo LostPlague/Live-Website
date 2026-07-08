@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import inIcon from '../../assets/showcase/contact-in.png';
 import ResumeDownload from './ResumeDownload';
 import type { StyleSheetCSS } from './types';
+import { track } from '../../../analytics';
 
 // Ported verbatim from Henry's components/showcase/Contact.tsx
 
@@ -84,6 +85,7 @@ const Contact: React.FC<ContactProps> = () => {
           ? { success: true }
           : { success: false, error: raw.message || 'Submission failed, please try again.' };
       if (data.success) {
+        track('contact_submitted', { ok: true, hasCompany: !!company });
         setFormMessage(`Message successfully sent. Thank you ${name}!`);
         setCompany('');
         setEmail('');
@@ -92,6 +94,7 @@ const Contact: React.FC<ContactProps> = () => {
         setFormMessageColor(Colors.blue);
         setIsLoading(false);
       } else {
+        track('contact_submitted', { ok: false });
         setFormMessage(data.error || 'Submission failed, please try again.');
         setFormMessageColor(Colors.red);
         setIsLoading(false);

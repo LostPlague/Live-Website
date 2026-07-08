@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './Minesweeper.css';
+import { track } from '../../analytics';
 
 /* ═══════════════════════════════════════════════════════════════
    Classic Windows 95 Minesweeper — Fully Playable
@@ -142,6 +143,14 @@ export const Minesweeper: React.FC = () => {
   const [flagsUsed, setFlagsUsed] = useState(0);
   const [timer, setTimer] = useState(0);
   const minesPlacedRef = useRef(false);
+
+  // report the outcome (with time played) when a game ends
+  useEffect(() => {
+    if (status === 'won' || status === 'lost') {
+      track('minesweeper_result', { result: status, seconds: timer });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   const minesRemaining = MINES - flagsUsed;
 

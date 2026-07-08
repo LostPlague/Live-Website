@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Window } from '../components/Window';
 import lockIcon from '../assets/lockIcon.png';
 import { playAccessChirp } from '../components/matrixAudio';
+import { track } from '../../analytics';
 
 // Secret Files — a three-stage descent. This window owns STAGE 1:
 //   q1  — locked Win98 dialog, clearance question 1 (hallucination).
@@ -80,6 +81,9 @@ const SecretFiles: React.FC<SecretFilesProps> = (props) => {
   const [typed, setTyped] = useState<string[]>([]);
   const [typedDone, setTypedDone] = useState(false);
 
+  // funnel: they opened the Secret Files
+  useEffect(() => { track('secret_opened'); }, []);
+
   // typewriter for the stage-1 matrix comment
   useEffect(() => {
     if (stage !== 's1') return;
@@ -109,17 +113,30 @@ const SecretFiles: React.FC<SecretFilesProps> = (props) => {
 
   const tryStage1 = () => {
     if (A1.test(attempt.trim())) {
+      track('secret_stage_passed', { stage: 'hallucination', order: 1 });
       playAccessChirp();
       setAttempt('');
       setStage('s1');
-    } else deny();
+    } else {
+      track('secret_wrong_answer', { stage: 'hallucination' });
+      deny();
+    }
   };
 
   const tryStage2 = () => {
     if (A2.test(attempt.trim())) {
+      track('secret_stage_passed', { stage: 'turing', order: 2 });
       setAttempt('');
       props.onEnterMatrix();
-    } else deny();
+    } else {
+      track('secret_wrong_answer', { stage: 'turing' });
+      deny();
+    }
+  };
+
+  const giveUp = () => {
+    track('secret_gave_up', { stage: 'turing' });
+    props.onClose();
   };
 
   return (
@@ -183,7 +200,7 @@ const SecretFiles: React.FC<SecretFilesProps> = (props) => {
                 <p className="app-secret-line app-secret-denied-green">
                   {denied ? '> ACCESS DENIED. THE MACHINE REMEMBERS.' : ' '}
                 </p>
-                <button className="app-secret-giveup" onMouseDown={props.onClose}>
+                <button className="app-secret-giveup" onMouseDown={giveUp}>
                   [ CLOSE THE FILE — STAY ON THE SURFACE ]
                 </button>
               </div>

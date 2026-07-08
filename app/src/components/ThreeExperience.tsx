@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Experience } from '../experience/Experience';
 import { HUDOverlay } from './HUDOverlay';
+import { track } from '../analytics';
 
 export const ThreeExperience: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -108,6 +109,7 @@ export const ThreeExperience: React.FC = () => {
     // No startup chime here. Henry's intro audio is the typewriter clicks on the
     // HUD name/title/time typing (see HUDOverlay → ccType), which begin right after
     // boot and stop on their own when the typing finishes.
+    track('experience_started'); // funnel: BIOS → clicked start → into the room
     setBooted(true);
     experienceInstanceRef.current?.camera.triggerTransition('idle', 2500);
     experienceInstanceRef.current?.audioManager.startAmbient();

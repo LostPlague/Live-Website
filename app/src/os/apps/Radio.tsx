@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Window } from '../components/Window';
 import radioIcon from '../assets/radioIcon.png';
+import { track } from '../../analytics';
 
 // Win98-style radio tuned to Hit Radio (Morocco). Their website blocks
 // iframing (X-Frame-Options: DENY), so this plays their official live audio
@@ -38,6 +39,7 @@ const Radio: React.FC<RadioProps> = (props) => {
       audioRef.current.onerror = () => setStatus('stopped');
     }
     setStatus('buffering');
+    track('radio_play');
     audioRef.current.play().catch(() => setStatus('stopped'));
   };
 
