@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   playPowerDown,
   startGlitchStatic,
@@ -7,9 +7,9 @@ import {
   startMatrixFinale,
   playFinaleRiser,
   playCountdownTick,
-  playImpactPop,
-  playCatastrophicBreak,
-  playCollapseCascade,
+  playGlassBreak,
+  preloadGlassBreak,
+  BREAK_HIT2,
   playReenterZap,
 } from './matrixAudio';
 
@@ -138,11 +138,10 @@ const MatrixRainFull: React.FC = () => {
 
 /**
  * The green vortex — after the break, the single way back to the simulation.
- * A full-screen TILTED 3D funnel (whirlpool seen from above-and-across, not a
- * flat spiral): ~1300 particles on Kepler-style infall orbits drawn as
- * velocity streaks with additive trails, a starfield being dragged in behind
- * them, a pulsing white-green core flare with slow god-rays, comet runners,
- * and occasional lightning arcs feeding the throat. No rings, no circles.
+ * Three spiral arms of glowing particles drawn as motion streaks (fade-
+ * instead-of-clear + additive compositing) accelerating into a pulsing white-
+ * green core, with a few comet runners. No ring. The canvas slow-rotates in
+ * CSS for extra depth.
  */
 const VortexPortal: React.FC<{ onEnter: () => void }> = ({ onEnter }) => {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -151,167 +150,69 @@ const VortexPortal: React.FC<{ onEnter: () => void }> = ({ onEnter }) => {
     const canvas = ref.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d')!;
-    const dpr = Math.min(1.5, window.devicePixelRatio || 1);
-    const fit = () => {
-      canvas.width = Math.max(2, canvas.clientWidth * dpr);
-      canvas.height = Math.max(2, canvas.clientHeight * dpr);
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, canvas.width, canvas.height); // opaque base for trails
-    };
-    fit();
-    window.addEventListener('resize', fit);
-
-    type P = { r: number; th: number; sp: number; comet: boolean; px: number; py: number; has: boolean };
-    const spawn = (r?: number): P => ({
-      r: r ?? 0.96 + Math.random() * 0.12,
-      th: Math.random() * Math.PI * 2,
-      sp: 0.55 + Math.random() * 1.35,
-      comet: Math.random() < 0.045,
-      px: 0, py: 0, has: false,
+    const S = canvas.width;
+    const c = S / 2;
+    const ARMS = 3;
+    const parts = new Array(380).fill(0).map(() => {
+      const arm = (Math.random() * ARMS) | 0;
+      return {
+        a: (arm / ARMS) * Math.PI * 2 + Math.random() * 0.9, // clustered per arm
+        r: 24 + Math.random() * (c - 30),
+        s: 0.6 + Math.random() * 1.4,
+        comet: Math.random() < 0.06, // a few bright white runners
+      };
     });
-    const parts: P[] = Array.from({ length: 1600 }, () => spawn(Math.random() * 0.9 + 0.12));
-    const stars = Array.from({ length: 120 }, () => ({
-      a: Math.random() * Math.PI * 2,
-      r: 0.55 + Math.random() * 0.75,
-      z: 0.25 + Math.random() * 0.75,
-    }));
-    let arcs: { born: number; pts: { x: number; y: number }[] }[] = [];
-    let nextArcAt = performance.now() + 700;
-
-    // tilted-disk projection — the funnel throat recedes gently away, so the
-    // whirlpool reads 3D but the glowing core stays the composition's heart
-    const TILT = 0.92; // rad — how far the disk leans away from us
-    const proj = (r: number, th: number, W: number, H: number) => {
-      const Rmax = Math.min(W, H) * 0.56;
-      const R = r * Rmax;
-      const x3 = Math.cos(th) * R;
-      const y3 = Math.sin(th) * R;
-      const z3 = Math.pow(1 - Math.min(1, r), 2.1) * Rmax * 0.55; // funnel depth
-      const cosT = Math.cos(TILT);
-      const sinT = Math.sin(TILT);
-      const y2 = y3 * cosT - z3 * sinT;
-      const z2 = y3 * sinT + z3 * cosT;
-      const f = Rmax * 3.2;
-      const s = f / (f + z2 + Rmax * 0.6);
-      return { x: W / 2 + x3 * s, y: H * 0.53 + y2 * s, s };
-    };
-
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, S, S); // opaque base so trails can fade
     let raf = 0;
-    let last = performance.now();
-    const frame = (now: number) => {
+    const frame = () => {
       raf = requestAnimationFrame(frame);
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
-      const W = canvas.width;
-      const H = canvas.height;
-      const t = now * 0.001;
-
-      // trails: fade instead of clear (low fade = long luminous streaks)
+      // motion trails: fade the last frame instead of clearing it
       ctx.globalCompositeOperation = 'source-over';
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.19)';
-      ctx.fillRect(0, 0, W, H);
-
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+      ctx.fillRect(0, 0, S, S);
       ctx.globalCompositeOperation = 'lighter';
-
-      // starfield being dragged toward the throat
-      for (const st of stars) {
-        st.a += dt * 0.05;
-        st.r -= dt * 0.008;
-        if (st.r < 0.2) { st.r = 1.15; st.a = Math.random() * Math.PI * 2; }
-        const p = proj(st.r, st.a, W, H);
-        ctx.fillStyle = `rgba(190, 255, 215, ${(0.1 + st.z * 0.22).toFixed(2)})`;
-        ctx.fillRect(p.x, p.y, 1.3 * st.z, 1.3 * st.z);
-      }
-
-      // infalling streaks — Kepler-ish: faster spin + faster fall near center
+      const t = performance.now() * 0.001;
+      // pulsing core
+      const pulse = 16 + Math.sin(t * 2.2) * 5;
+      const grad = ctx.createRadialGradient(c, c, 0, c, c, pulse * 4);
+      grad.addColorStop(0, 'rgba(210, 255, 228, 1)');
+      grad.addColorStop(0.35, 'rgba(0, 255, 65, 0.5)');
+      grad.addColorStop(1, 'rgba(0, 255, 65, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(c, c, pulse * 4, 0, Math.PI * 2);
+      ctx.fill();
+      // spiral arms: glowing STREAKS accelerating into the throat
       for (const p of parts) {
-        p.th += (0.25 + 2.8 * Math.pow(1 - p.r, 2.4)) * p.sp * dt;
-        p.r -= (0.05 + 0.36 * Math.pow(1 - p.r, 1.7)) * p.sp * dt;
-        if (p.r < 0.035) {
-          const np = spawn();
-          p.r = np.r; p.th = np.th; p.sp = np.sp; p.comet = np.comet; p.has = false;
+        const px = c + Math.cos(p.a) * p.r;
+        const py = c + Math.sin(p.a) * p.r * 0.9;
+        p.a += (0.02 + (c - p.r) * 0.00085) * p.s;
+        p.r -= (0.5 + (c - p.r) * 0.004) * p.s; // faster as it falls in
+        if (p.r < 10) {
+          p.r = c - 24 + Math.random() * 12;
+          p.comet = Math.random() < 0.06;
         }
-        const c2 = proj(p.r, p.th, W, H);
-        if (p.has) {
-          const depth = 1 - p.r;
-          ctx.strokeStyle = p.comet
-            ? `rgba(240, 255, 250, ${(0.5 + depth * 0.5).toFixed(2)})`
-            : `rgba(${(40 + depth * 195) | 0}, 255, ${(85 + depth * 155) | 0}, ${(0.16 + depth * 0.78).toFixed(2)})`;
-          ctx.lineWidth = (p.comet ? 3.2 : 0.9 + depth * 2.6) * c2.s * dpr;
-          ctx.beginPath();
-          ctx.moveTo(p.px, p.py);
-          ctx.lineTo(c2.x, c2.y);
-          ctx.stroke();
-        }
-        p.px = c2.x; p.py = c2.y; p.has = true;
-      }
-
-      // the throat — pulsing white-green flare (no ring, just light)
-      const core = proj(0.02, 0, W, H);
-      const R0 = Math.min(W, H) * (0.1 + 0.012 * Math.sin(t * 2.4));
-      const flare = ctx.createRadialGradient(core.x, core.y, 0, core.x, core.y, R0);
-      flare.addColorStop(0, 'rgba(225, 255, 238, 0.95)');
-      flare.addColorStop(0.3, 'rgba(60, 255, 120, 0.4)');
-      flare.addColorStop(1, 'rgba(0, 255, 65, 0)');
-      ctx.fillStyle = flare;
-      ctx.fillRect(core.x - R0, core.y - R0, R0 * 2, R0 * 2);
-
-      // soft god-rays breathing out of the throat
-      for (let i = 0; i < 7; i++) {
-        const a = t * 0.07 + (i / 7) * Math.PI * 2;
-        const len = Math.min(W, H) * 0.28;
-        const gr = ctx.createLinearGradient(core.x, core.y, core.x + Math.cos(a) * len, core.y + Math.sin(a) * len * 0.5);
-        gr.addColorStop(0, 'rgba(120, 255, 170, 0.07)');
-        gr.addColorStop(1, 'rgba(0, 255, 65, 0)');
-        ctx.strokeStyle = gr;
-        ctx.lineWidth = 16 * dpr;
+        const x = c + Math.cos(p.a) * p.r;
+        const y = c + Math.sin(p.a) * p.r * 0.9;
+        const b = 1 - p.r / c;
+        ctx.strokeStyle = p.comet
+          ? `rgba(235, 255, 245, ${(0.5 + b * 0.5).toFixed(2)})`
+          : `rgba(${(50 + b * 170) | 0}, 255, ${(100 + b * 140) | 0}, ${(0.16 + b * 0.7).toFixed(2)})`;
+        ctx.lineWidth = p.comet ? 2.6 : 1 + b * 2;
         ctx.beginPath();
-        ctx.moveTo(core.x, core.y);
-        ctx.lineTo(core.x + Math.cos(a) * len, core.y + Math.sin(a) * len * 0.5);
+        ctx.moveTo(px, py);
+        ctx.lineTo(x, y);
         ctx.stroke();
       }
-
-      // lightning: a jagged feed-line from the rim into the throat
-      if (now >= nextArcAt) {
-        nextArcAt = now + 700 + Math.random() * 1100;
-        const th0 = Math.random() * Math.PI * 2;
-        const pts: { x: number; y: number }[] = [];
-        for (let i = 0; i <= 9; i++) {
-          const r = 0.92 - (i / 9) * 0.88;
-          const pp = proj(r, th0 + (Math.random() - 0.5) * 0.5, W, H);
-          pts.push({ x: pp.x + (Math.random() - 0.5) * 26, y: pp.y + (Math.random() - 0.5) * 26 });
-        }
-        arcs.push({ born: now, pts });
-      }
-      arcs = arcs.filter((a) => now - a.born < 240);
-      for (const a of arcs) {
-        const life = 1 - (now - a.born) / 240;
-        ctx.strokeStyle = `rgba(215, 255, 235, ${(life * 0.85).toFixed(2)})`;
-        ctx.lineWidth = 2.2 * dpr;
-        ctx.beginPath();
-        ctx.moveTo(a.pts[0].x, a.pts[0].y);
-        for (let i = 1; i < a.pts.length; i++) ctx.lineTo(a.pts[i].x, a.pts[i].y);
-        ctx.stroke();
-      }
-
-      // vignette so the funnel sits in darkness
-      ctx.globalCompositeOperation = 'source-over';
-      const vig = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.36, W / 2, H / 2, Math.max(W, H) * 0.72);
-      vig.addColorStop(0, 'rgba(0, 0, 0, 0)');
-      vig.addColorStop(1, 'rgba(0, 0, 0, 0.55)');
-      ctx.fillStyle = vig;
-      ctx.fillRect(0, 0, W, H);
     };
     raf = requestAnimationFrame(frame);
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', fit);
-    };
+    return () => cancelAnimationFrame(raf);
   }, []);
 
   return (
     <div className="mtx-vortex-wrap" onMouseDown={onEnter}>
-      <canvas ref={ref} className="mtx-vortexfs" />
+      <canvas ref={ref} width={560} height={560} className="mtx-vortex" />
       <p className="mtx-vortex-hint">[ THE WAY BACK ]</p>
     </div>
   );
@@ -497,23 +398,24 @@ const ShatterOverlay: React.FC<{ vortex: boolean; onVortex: () => void }> = ({
     const w = buildWeb(canvas.width, canvas.height);
     setWeb(w);
 
-    const T_BURST = 360;   // catastrophic spread
-    const T_FLY = 1500;    // the glass lets go
-    playImpactPop();
-    const tB = window.setTimeout(() => {
-      setBurst(true);
-      playCatastrophicBreak();
-    }, T_BURST);
+    // The whole break is ONE real clip (Med's glass smash). Its two audible
+    // hits drive the two visual stages: the first crack lands at t=0, the
+    // catastrophic collapse at the clip's main shatter peak (T_BURST). Audio
+    // and picture cannot drift — both start on this same frame.
+    const T_BURST = Math.round(BREAK_HIT2 * 1000); // main shatter peak in the clip
+    const T_FLY = T_BURST + 120;                   // shards let go into the cascade
+    playGlassBreak();
+    const tB = window.setTimeout(() => setBurst(true), T_BURST);
     const tF = window.setTimeout(() => {
       setFly(true);
-      playCollapseCascade();
       canvas.style.transition = 'opacity 0.45s ease-out';
       canvas.style.opacity = '0';
     }, T_FLY);
 
-    // band k opens at time — inner micro-web on impact, the rest at the burst
+    // band k opens at time — inner micro-web on the first hit, the outer web
+    // racing out to COMPLETE exactly on the main shatter (T_BURST)
     const openT = (k: number) =>
-      k <= 2 ? (k / 2) * 130 : T_BURST + ((k - 2) / (RF.length - 3)) * 330;
+      k <= 2 ? (k / 2) * 130 : 320 + ((k - 2) / (RF.length - 3)) * (T_BURST - 415);
     const rf = (tNow: number, k: number) =>
       Math.min(1, Math.max(0, (tNow - openT(k)) / 95));
 
@@ -697,6 +599,57 @@ const MatrixScreen: React.FC<{
     setAttempt(v);
   };
 
+  // level-3 finale text: fit each line as BIG as possible to the screen. With
+  // ~18 lines on a 1024-tall CRT a single uniform size can't grow much, so we
+  // size each line to fill the width (capped), then scale the whole block down
+  // only if it would overrun the height. Computed once from the full lines so
+  // the size never jumps while the typewriter reveals characters.
+  const msgRef = useRef<HTMLDivElement>(null);
+  const [bigSizes, setBigSizes] = useState<number[]>([]);
+  useLayoutEffect(() => {
+    if (level !== 3) return;
+    const box = msgRef.current;
+    if (!box || !box.clientWidth) return;
+    const CAP = 78;
+    const MIN = 26;
+    const availW = box.clientWidth;
+    const availH = box.clientHeight;
+
+    // pass 1 — size each line to fill the width (capped)
+    const probe = document.createElement('div');
+    probe.style.cssText =
+      "position:absolute;visibility:hidden;white-space:nowrap;font-family:'Courier New',monospace;font-weight:bold";
+    box.appendChild(probe);
+    const sizes = lines.map((l) => {
+      if (!l) return 0;
+      probe.style.fontSize = `${CAP}px`;
+      probe.textContent = l;
+      const nat = probe.offsetWidth || 1;
+      return nat > availW ? Math.max(MIN, (CAP * availW) / nat) : CAP;
+    });
+    box.removeChild(probe);
+
+    // pass 2 — mirror the real stacked column (same CSS as .mtx-line--big) and
+    // MEASURE its height, so the height-fit scale is exact, not estimated
+    const col = document.createElement('div');
+    col.style.cssText = `position:absolute;visibility:hidden;left:-9999px;width:${availW}px`;
+    for (let i = 0; i < lines.length; i++) {
+      const d = document.createElement('div');
+      d.style.cssText =
+        "font-family:'Courier New',monospace;font-weight:bold;white-space:nowrap;line-height:1.12;margin-bottom:6px";
+      if (lines[i]) { d.style.fontSize = `${sizes[i]}px`; d.textContent = lines[i]; }
+      else { d.style.height = '16px'; d.style.marginBottom = '0'; }
+      col.appendChild(d);
+    }
+    box.appendChild(col);
+    const realH = col.offsetHeight;
+    box.removeChild(col);
+
+    const safeH = availH * 0.96; // headroom so nothing clips top/bottom
+    const k = realH > safeH ? safeH / realH : 1;
+    setBigSizes(sizes.map((s) => (s ? Math.round(s * k) : 0)));
+  }, [level, lines]);
+
   // self-paced typewriter — level 2 always; level 3 only as a FALLBACK when
   // no voice drive arrives from the shell (standalone /os, TTS unavailable).
   useEffect(() => {
@@ -813,6 +766,7 @@ const MatrixScreen: React.FC<{
 
   useEffect(() => {
     if (finaleStage !== 'countdown') return;
+    preloadGlassBreak(); // decode the smash now so it fires in sync on the break
     setCount(5);
     playCountdownTick(5);
     const iv = window.setInterval(() => {
@@ -901,9 +855,18 @@ const MatrixScreen: React.FC<{
     >
       {finaleStage !== 'shatter' && finaleStage !== 'vortex' && <MatrixRainFull />}
       {(level === 2 || finaleStage === 'message') && (
-        <div className={`mtx-message${level === 3 ? ' mtx-message--big' : ''}`}>
+        <div
+          ref={level === 3 ? msgRef : undefined}
+          className={`mtx-message${level === 3 ? ' mtx-message--big' : ''}`}
+        >
           {typed.map((l, i) => (
-            <p key={i} className={`mtx-line${level === 3 ? ' mtx-line--big' : ''}`}>{l}</p>
+            <p
+              key={i}
+              className={`mtx-line${level === 3 ? ' mtx-line--big' : ''}`}
+              style={level === 3 && bigSizes[i] ? { fontSize: `${bigSizes[i]}px` } : undefined}
+            >
+              {l}
+            </p>
           ))}
           {level === 2 && typedDone && (
             <div className="mtx-answer-block">

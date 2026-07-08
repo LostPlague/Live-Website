@@ -920,14 +920,17 @@ html, body, #root {
   align-items: center;
   text-align: center;
 }
-.mtx-line--big {
-  font-size: 54px;
+/* compound selector: `.mtx-line` is defined LATER in this file, so at equal
+   specificity it would win — this keeps the --big overrides in force */
+.mtx-line.mtx-line--big {
+  font-size: 60px; /* fallback; JS fits each line to the screen width */
   font-weight: bold;
-  line-height: 1.2;
-  margin-bottom: 5px;
-  text-shadow: 0 0 16px rgba(0, 255, 65, 0.95), 2px 2px 0 #000;
+  line-height: 1.12;
+  margin-bottom: 6px;
+  white-space: nowrap; /* never wrap — each line is sized to fit */
+  text-shadow: 0 0 20px rgba(0, 255, 65, 0.95), 2px 2px 0 #000;
 }
-.mtx-line--big:empty { height: 16px; margin: 0; }
+.mtx-line.mtx-line--big:empty { height: 16px; margin: 0; }
 
 /* countdown before the break */
 .mtx-countdown {
@@ -1010,32 +1013,32 @@ html, body, #root {
 }
 @keyframes mtx-break-flash { from { opacity: 1; } to { opacity: 0; } }
 
-/* the vortex — the single way back (full-screen 3D funnel on canvas) */
+/* the vortex — the single way back (centered spiral on canvas) */
 .mtx-vortex-wrap {
   position: absolute;
-  inset: 0;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   cursor: pointer;
-  animation: mtx-vortex-in 1.1s ease-out both;
+  animation: mtx-vortex-in 1.4s ease-out both;
   z-index: 3;
 }
 @keyframes mtx-vortex-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.55); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
-.mtx-vortexfs {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+.mtx-vortex {
   display: block;
+  border-radius: 50%;
+  animation: mtx-vortex-spin 14s linear infinite;
 }
-.mtx-vortex-wrap:hover .mtx-vortexfs { filter: brightness(1.18); }
+@keyframes mtx-vortex-spin { to { transform: rotate(360deg); } }
+.mtx-vortex-wrap:hover .mtx-vortex { filter: brightness(1.35); }
 .mtx-vortex-hint {
-  position: absolute;
-  left: 50%;
-  bottom: 7%;
-  transform: translateX(-50%);
-  margin: 0;
+  margin: 10px 0 0;
   font-family: 'Courier New', monospace;
   font-size: 26px;
   font-weight: bold;
@@ -1043,7 +1046,6 @@ html, body, #root {
   color: rgba(0, 255, 65, 0.8);
   text-shadow: 0 0 10px rgba(0, 255, 65, 0.7);
   animation: secret-blink 1.6s steps(1) infinite;
-  pointer-events: none;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

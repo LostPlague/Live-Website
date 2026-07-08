@@ -17,30 +17,6 @@ function noiseBuffer(c: AudioContext, seconds: number): AudioBuffer {
   return buf;
 }
 
-/** 1.4s stereo decaying-noise impulse — the "room" the big breaks ring in. */
-let impulseBuf: AudioBuffer | null = null;
-function impulse(c: AudioContext): AudioBuffer {
-  if (impulseBuf && impulseBuf.sampleRate === c.sampleRate) return impulseBuf;
-  const len = Math.ceil(c.sampleRate * 1.4);
-  const buf = c.createBuffer(2, len, c.sampleRate);
-  for (let ch = 0; ch < 2; ch++) {
-    const d = buf.getChannelData(ch);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6);
-  }
-  impulseBuf = buf;
-  return buf;
-}
-
-function distortionCurve(k: number): Float32Array {
-  const n = 512;
-  const curve = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const x = (i / (n - 1)) * 2 - 1;
-    curve[i] = Math.tanh(k * x);
-  }
-  return curve;
-}
-
 // The finale score's master gain, held while it plays so impacts can DUCK the
 // music — the momentary drop makes the crash feel enormous by contrast.
 let finaleMaster: GainNode | null = null;
@@ -57,25 +33,36 @@ function duckFinale(to = 0.12, holdMs = 260, backMs = 900): void {
   g.exponentialRampToValueAtTime(FINALE_LEVEL, t + 0.05 + (holdMs + backMs) / 1000);
 }
 
-/**
- * Impact bus: local compressor to hold peaks + a convolver send for the tail.
- * Returns the entry gain; everything self-severs after `life` ms.
- */
-function impactBus(c: AudioContext, wetLevel: number, life: number): GainNode {
-  const bus = c.createGain();
-  const comp = c.createDynamicsCompressor();
-  comp.threshold.value = -16;
-  comp.ratio.value = 7;
-  const verb = c.createConvolver();
-  verb.buffer = impulse(c);
-  const wet = c.createGain();
-  wet.gain.value = wetLevel;
-  bus.connect(comp).connect(c.destination);
-  bus.connect(verb).connect(wet).connect(comp);
-  window.setTimeout(() => {
-    try { bus.disconnect(); verb.disconnect(); wet.disconnect(); comp.disconnect(); } catch {}
-  }, life);
-  return bus;
+// ── the real glass-break clip (Med's asset) ────────────────────────────────
+// Analysis of THIS file (silence-gap + RMS): 0.76s of silence, first smash at
+// ~0.78s, a dip, the main shatter at ~1.55s, tail out to ~3.2s. We skip the
+// dead lead-in by starting playback at BREAK_OFFSET so the first hit lands the
+// instant the visual cracks. The two audio peaks are BREAK_HIT1 / BREAK_HIT2
+// (relative to playback start) — the ShatterOverlay times its two visual
+// stages (impact-web, catastrophic-collapse) to exactly these.
+const BREAK_SRC = '/audio/glass_break.mp3';
+export const BREAK_OFFSET = 0.76;        // trim the silent run-in
+export const BREAK_HIT1 = 0.0;           // first crack (immediate)
+export const BREAK_HIT2 = 0.79;          // main shatter, relative to start
+export const BREAK_TAIL_END = 2.45;      // last audible tinkles
+
+let breakBufferPromise: Promise<AudioBuffer | null> | null = null;
+
+/** Fetch + decode the glass clip once; call early so it's ready on the break. */
+export function preloadGlassBreak(): Promise<AudioBuffer | null> {
+  if (breakBufferPromise) return breakBufferPromise;
+  breakBufferPromise = (async () => {
+    try {
+      const c = ensureCtx();
+      const res = await fetch(BREAK_SRC);
+      if (!res.ok) return null;
+      return await c.decodeAudioData(await res.arrayBuffer());
+    } catch {
+      breakBufferPromise = null;
+      return null;
+    }
+  })();
+  return breakBufferPromise;
 }
 
 /** CRT power-down groan: descending saw + sub sine, ~1.6s, fire-and-forget. */
@@ -597,223 +584,55 @@ export function playCountdownTick(n: number): void {
 }
 
 /**
- * The break is THREE hits matched to the visuals:
- *   playImpactPop        — the first strike: snap, glass ping, sub thump.
- *   playCatastrophicBreak— the web races out: deep sub DROP, distorted crunch,
- *                          crackle train, metallic shriek, slapback echo,
- *                          reverb tail — and the music ducks out of its way.
- *   playCollapseCascade  — the glass lets go: body thumps, rumble, whoosh,
- *                          26 stereo shard tinkles raining down.
+ * Plays Med's real glass-break clip for the whole shatter. The silent lead-in
+ * is trimmed (starts at BREAK_OFFSET) so the first smash lands the instant the
+ * visual cracks; the finale score ducks under it in two dips timed to the two
+ * audible hits (BREAK_HIT1 / BREAK_HIT2) so each smash punches. Falls back to
+ * a synthesized crash only if the clip somehow failed to load.
  */
-export function playImpactPop(): void {
+let lastBreakAt = 0;
+export function playGlassBreak(): void {
   const c = ensureCtx();
-  const t = c.currentTime;
-  const bus = impactBus(c, 0.18, 1600);
+  // guard against a rapid double-trigger (React StrictMode double-invokes the
+  // shatter effect in dev) so the smash never plays twice / phases
+  const nowMs = performance.now();
+  if (nowMs - lastBreakAt < 700) return;
+  lastBreakAt = nowMs;
+  const buf = breakBufferPromise;
+  // duck the score on both hits regardless of which path plays
+  duckFinale(0.12, 260, 700);
+  window.setTimeout(() => duckFinale(0.1, 300, 1100), BREAK_HIT2 * 1000);
 
-  // snap click
-  const src = c.createBufferSource();
-  src.buffer = noiseBuffer(c, 0.07);
-  const hp = c.createBiquadFilter();
-  hp.type = 'highpass';
-  hp.frequency.value = 4200;
-  const g = c.createGain();
-  g.gain.setValueAtTime(0.4, t);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
-  src.connect(hp).connect(g).connect(bus);
-  src.start(t);
-  src.onended = () => { src.disconnect(); hp.disconnect(); g.disconnect(); };
-
-  // stressed-glass ping
-  const o = c.createOscillator();
-  o.type = 'triangle';
-  o.frequency.value = 3300;
-  const og = c.createGain();
-  og.gain.setValueAtTime(0.0001, t);
-  og.gain.exponentialRampToValueAtTime(0.1, t + 0.004);
-  og.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
-  o.connect(og).connect(bus);
-  o.start(t); o.stop(t + 0.35);
-  o.onended = () => { o.disconnect(); og.disconnect(); };
-
-  // sub thump so the strike has a body
-  const s = c.createOscillator();
-  s.type = 'sine';
-  s.frequency.setValueAtTime(120, t);
-  s.frequency.exponentialRampToValueAtTime(48, t + 0.14);
-  const sg = c.createGain();
-  sg.gain.setValueAtTime(0.0001, t);
-  sg.gain.exponentialRampToValueAtTime(0.32, t + 0.008);
-  sg.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
-  s.connect(sg).connect(bus);
-  s.start(t); s.stop(t + 0.3);
-  s.onended = () => { s.disconnect(); sg.disconnect(); };
-
-  // tension creak — the pane is about to lose
-  const cr = c.createOscillator();
-  cr.type = 'sawtooth';
-  cr.frequency.setValueAtTime(150, t + 0.05);
-  cr.frequency.exponentialRampToValueAtTime(84, t + 0.4);
-  const crg = c.createGain();
-  crg.gain.setValueAtTime(0.0001, t + 0.05);
-  crg.gain.exponentialRampToValueAtTime(0.05, t + 0.09);
-  crg.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
-  cr.connect(crg).connect(bus);
-  cr.start(t + 0.05); cr.stop(t + 0.46);
-  cr.onended = () => { cr.disconnect(); crg.disconnect(); };
-}
-
-export function playCatastrophicBreak(): void {
-  const c = ensureCtx();
-  const t = c.currentTime;
-  duckFinale(0.1, 300, 1000);
-  const bus = impactBus(c, 0.34, 2600);
-
-  // deep sub DROP — the floor falls out
-  const sub = c.createOscillator();
-  sub.type = 'sine';
-  sub.frequency.setValueAtTime(140, t);
-  sub.frequency.exponentialRampToValueAtTime(26, t + 0.55);
-  const subG = c.createGain();
-  subG.gain.setValueAtTime(0.0001, t);
-  subG.gain.exponentialRampToValueAtTime(0.9, t + 0.01);
-  subG.gain.exponentialRampToValueAtTime(0.0001, t + 1.35);
-  sub.connect(subG).connect(bus);
-  sub.start(t); sub.stop(t + 1.4);
-  sub.onended = () => { sub.disconnect(); subG.disconnect(); };
-
-  // distorted crunch — waveshaped noise swept down through the wreck
-  const cr = c.createBufferSource();
-  cr.buffer = noiseBuffer(c, 0.55);
-  const shaper = c.createWaveShaper();
-  shaper.curve = distortionCurve(13);
-  const bp = c.createBiquadFilter();
-  bp.type = 'bandpass';
-  bp.Q.value = 0.9;
-  bp.frequency.setValueAtTime(2600, t);
-  bp.frequency.exponentialRampToValueAtTime(320, t + 0.5);
-  const cg = c.createGain();
-  cg.gain.setValueAtTime(0.5, t);
-  cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
-  cr.connect(shaper).connect(bp).connect(cg).connect(bus);
-  cr.start(t);
-  cr.onended = () => { cr.disconnect(); shaper.disconnect(); bp.disconnect(); cg.disconnect(); };
-
-  // slapback echo on the crunch — sells the size of the space
-  const delay = c.createDelay(0.5);
-  delay.delayTime.value = 0.13;
-  const fb = c.createGain();
-  fb.gain.value = 0.32;
-  const slap = c.createGain();
-  slap.gain.setValueAtTime(0.3, t);
-  slap.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
-  cg.connect(delay);
-  delay.connect(fb).connect(delay);
-  delay.connect(slap).connect(bus);
-  window.setTimeout(() => {
-    try { delay.disconnect(); fb.disconnect(); slap.disconnect(); } catch {}
-  }, 2400);
-
-  // crackle train — the web propagating, 16 micro-fractures
-  for (let i = 0; i < 16; i++) {
-    const st = t + Math.random() * 0.33;
-    const n = c.createBufferSource();
-    n.buffer = noiseBuffer(c, 0.02);
-    const nh = c.createBiquadFilter();
-    nh.type = 'highpass';
-    nh.frequency.value = 3000 + Math.random() * 3200;
-    const ng = c.createGain();
-    ng.gain.setValueAtTime(0.1 + Math.random() * 0.2, st);
-    ng.gain.exponentialRampToValueAtTime(0.0001, st + 0.03);
-    n.connect(nh).connect(ng).connect(bus);
-    n.start(st);
-    n.onended = () => { n.disconnect(); nh.disconnect(); ng.disconnect(); };
-  }
-
-  // metallic shriek — two detuned squares screaming briefly
-  [1870, 1883].forEach((f) => {
-    const o = c.createOscillator();
-    o.type = 'square';
-    o.frequency.value = f;
-    const oh = c.createBiquadFilter();
-    oh.type = 'highpass';
-    oh.frequency.value = 1200;
-    const og = c.createGain();
-    og.gain.setValueAtTime(0.0001, t);
-    og.gain.exponentialRampToValueAtTime(0.055, t + 0.012);
-    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
-    o.connect(oh).connect(og).connect(bus);
-    o.start(t); o.stop(t + 0.34);
-    o.onended = () => { o.disconnect(); oh.disconnect(); og.disconnect(); };
+  if (!buf) { synthCrashFallback(c); preloadGlassBreak(); return; }
+  buf.then((b) => {
+    if (!b) { synthCrashFallback(c); return; }
+    const src = c.createBufferSource();
+    src.buffer = b;
+    const g = c.createGain();
+    g.gain.value = 1.0;
+    const comp = c.createDynamicsCompressor();
+    comp.threshold.value = -10;
+    comp.ratio.value = 4;
+    src.connect(g).connect(comp).connect(c.destination);
+    src.start(c.currentTime, BREAK_OFFSET); // skip the silent run-in
+    src.onended = () => { try { src.disconnect(); g.disconnect(); comp.disconnect(); } catch {} };
   });
 }
 
-export function playCollapseCascade(): void {
-  const c = ensureCtx();
+/** Only used if the MP3 can't be fetched/decoded — a short synth smash. */
+function synthCrashFallback(c: AudioContext): void {
   const t = c.currentTime;
-  duckFinale(0.22, 220, 1100);
-  const bus = impactBus(c, 0.3, 3000);
-
-  // body: impact + deep after-shock
-  const thump = (at: number, f0: number, f1: number, gain: number, dur: number) => {
-    const o = c.createOscillator();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(f0, at);
-    o.frequency.exponentialRampToValueAtTime(f1, at + dur * 0.6);
-    const og = c.createGain();
-    og.gain.setValueAtTime(0.0001, at);
-    og.gain.exponentialRampToValueAtTime(gain, at + 0.012);
-    og.gain.exponentialRampToValueAtTime(0.0001, at + dur);
-    o.connect(og).connect(bus);
-    o.start(at); o.stop(at + dur + 0.05);
-    o.onended = () => { o.disconnect(); og.disconnect(); };
-  };
-  thump(t, 95, 30, 0.5, 0.7);
-  thump(t + 0.12, 62, 22, 0.4, 0.95);
-
-  // rumble under the fall
-  const rum = c.createBufferSource();
-  rum.buffer = noiseBuffer(c, 1.3);
-  const lp = c.createBiquadFilter();
-  lp.type = 'lowpass';
-  lp.frequency.value = 260;
-  const rg = c.createGain();
-  rg.gain.setValueAtTime(0.32, t);
-  rg.gain.exponentialRampToValueAtTime(0.0001, t + 1.25);
-  rum.connect(lp).connect(rg).connect(bus);
-  rum.start(t);
-  rum.onended = () => { rum.disconnect(); lp.disconnect(); rg.disconnect(); };
-
-  // whoosh of the pane letting go
-  const wh = c.createBufferSource();
-  wh.buffer = noiseBuffer(c, 0.8);
-  const wbp = c.createBiquadFilter();
-  wbp.type = 'bandpass';
-  wbp.Q.value = 1.2;
-  wbp.frequency.setValueAtTime(900, t);
-  wbp.frequency.exponentialRampToValueAtTime(180, t + 0.75);
-  const wg = c.createGain();
-  wg.gain.setValueAtTime(0.2, t);
-  wg.gain.exponentialRampToValueAtTime(0.0001, t + 0.8);
-  wh.connect(wbp).connect(wg).connect(bus);
-  wh.start(t);
-  wh.onended = () => { wh.disconnect(); wbp.disconnect(); wg.disconnect(); };
-
-  // 26 shard tinkles raining across the stereo field
-  for (let i = 0; i < 26; i++) {
-    const st = t + 0.03 + Math.random() * 1.05;
-    const o = c.createOscillator();
-    o.type = 'triangle';
-    o.frequency.value = 1600 + Math.random() * 5000;
-    const og = c.createGain();
-    og.gain.setValueAtTime(0.0001, st);
-    og.gain.exponentialRampToValueAtTime(0.03 + Math.random() * 0.05, st + 0.004);
-    og.gain.exponentialRampToValueAtTime(0.0001, st + 0.1 + Math.random() * 0.22);
-    const pan = c.createStereoPanner();
-    pan.pan.value = Math.random() * 2 - 1;
-    o.connect(og).connect(pan).connect(bus);
-    o.start(st); o.stop(st + 0.38);
-    o.onended = () => { o.disconnect(); og.disconnect(); pan.disconnect(); };
-  }
+  const src = c.createBufferSource();
+  src.buffer = noiseBuffer(c, 1.0);
+  const hp = c.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 2200;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.35, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+  src.connect(hp).connect(g).connect(c.destination);
+  src.start(t);
+  src.onended = () => { src.disconnect(); hp.disconnect(); g.disconnect(); };
 }
 
 /** Short rising zap + static tick when re-entering the desktop. */
