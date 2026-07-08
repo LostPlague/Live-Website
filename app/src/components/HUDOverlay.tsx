@@ -25,7 +25,7 @@ const hudVariants = {
 };
 
 const NAME_TEXT = 'Mohamed Tabari';
-const TITLE_TEXT = 'QA Engineer';
+const TITLE_TEXT = 'Software QA Engineer';
 
 /**
  * Ported 1:1 from Henry's InfoOverlay.tsx.
