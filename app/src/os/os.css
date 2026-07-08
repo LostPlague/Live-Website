@@ -957,11 +957,18 @@ html, body, #root {
   overflow: hidden;
   z-index: 6;
 }
+/* web-cut shards: full-screen layers clipped to the crack polygons, so the
+   pane visibly breaks into exactly the pieces the cracks outlined */
 .mtx-shard {
   position: absolute;
-  background: linear-gradient(160deg, #041d0d 0%, #02120a 60%, #000 100%);
-  box-shadow: inset 0 0 18px rgba(0, 255, 65, 0.25), inset 0 0 2px rgba(0, 255, 65, 0.6);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background:
+    radial-gradient(120% 90% at 30% 20%, rgba(0, 255, 65, 0.12) 0%, rgba(0, 0, 0, 0) 55%),
+    linear-gradient(160deg, #052312 0%, #02150b 55%, #000a05 100%);
   transition: transform 1.05s cubic-bezier(0.5, 0.05, 0.9, 0.4), opacity 1.05s ease-in;
+  will-change: transform, opacity;
 }
 .mtx-crack {
   position: absolute;
@@ -969,14 +976,24 @@ html, body, #root {
   width: 100%;
   height: 100%;
   pointer-events: none;
+  z-index: 1;
 }
-/* impact shake + white-green flash the instant the screen breaks */
-.mtx-shatter--shake { animation: mtx-screen-shake 0.5s steps(2) 1; }
+/* impact shake, then a harder QUAKE when the full web bursts to the edges */
+.mtx-shatter--shake { animation: mtx-screen-shake 0.45s steps(2) 1; }
 @keyframes mtx-screen-shake {
   0% { transform: translate(9px, -6px); }
   25% { transform: translate(-8px, 5px); }
   50% { transform: translate(6px, 4px); }
   75% { transform: translate(-5px, -4px); }
+  100% { transform: translate(0, 0); }
+}
+.mtx-shatter--quake { animation: mtx-screen-quake 0.65s steps(2) 1; }
+@keyframes mtx-screen-quake {
+  0% { transform: translate(16px, -11px) rotate(0.5deg); }
+  18% { transform: translate(-15px, 9px) rotate(-0.6deg); }
+  36% { transform: translate(12px, 10px) rotate(0.4deg); }
+  54% { transform: translate(-11px, -8px) rotate(-0.3deg); }
+  72% { transform: translate(7px, 5px); }
   100% { transform: translate(0, 0); }
 }
 .mtx-break-flash {
@@ -987,41 +1004,46 @@ html, body, #root {
   pointer-events: none;
   z-index: 2;
 }
+.mtx-break-flash--big {
+  background: radial-gradient(circle, rgba(245, 255, 250, 1) 0%, rgba(80, 255, 140, 0.7) 40%, rgba(0, 0, 0, 0) 80%);
+  animation-duration: 0.42s;
+}
 @keyframes mtx-break-flash { from { opacity: 1; } to { opacity: 0; } }
 
-/* the vortex — the single way back */
+/* the vortex — the single way back (full-screen 3D funnel on canvas) */
 .mtx-vortex-wrap {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  inset: 0;
   cursor: pointer;
-  animation: mtx-vortex-in 1.4s ease-out both;
+  animation: mtx-vortex-in 1.1s ease-out both;
   z-index: 3;
 }
 @keyframes mtx-vortex-in {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(0.55); }
-  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
-.mtx-vortex {
+.mtx-vortexfs {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   display: block;
-  border-radius: 50%;
-  animation: mtx-vortex-spin 14s linear infinite;
 }
-@keyframes mtx-vortex-spin { to { transform: rotate(360deg); } }
-.mtx-vortex-wrap:hover .mtx-vortex { filter: brightness(1.35); }
+.mtx-vortex-wrap:hover .mtx-vortexfs { filter: brightness(1.18); }
 .mtx-vortex-hint {
-  margin: 6px 0 0;
+  position: absolute;
+  left: 50%;
+  bottom: 7%;
+  transform: translateX(-50%);
+  margin: 0;
   font-family: 'Courier New', monospace;
   font-size: 26px;
   font-weight: bold;
   letter-spacing: 3px;
-  color: rgba(0, 255, 65, 0.75);
+  color: rgba(0, 255, 65, 0.8);
   text-shadow: 0 0 10px rgba(0, 255, 65, 0.7);
   animation: secret-blink 1.6s steps(1) infinite;
+  pointer-events: none;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

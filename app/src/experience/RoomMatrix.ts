@@ -217,11 +217,17 @@ export class RoomMatrix {
   private faceMat?: THREE.ShaderMaterial;
   private faceOccluderMat?: THREE.MeshBasicMaterial;
   private faceOpacity = { value: 0 };
-  // glowing red eyes — placement as fractions of the face's size (nudge to fit
-  // the model's sockets), size in world units
+  // glowing red eyes — anchored by RAYCAST onto the mesh surface: x/y are
+  // fractions of the face's width/height (from its center), the depth comes
+  // from the model itself. Two layers per eye: white-hot core + soft red halo.
   private eyeSprites: THREE.Sprite[] = [];
-  private eyeMat?: THREE.SpriteMaterial;
-  public eyeTune = { x: 0.15, y: 0.12, z: 0.62, size: 58 };
+  private eyeCoreMat?: THREE.SpriteMaterial;
+  private eyeHaloMat?: THREE.SpriteMaterial;
+  private eyeSocketMat?: THREE.SpriteMaterial;
+  private faceModel?: THREE.Object3D;
+  private faceSize = new THREE.Vector3();
+  private faceScale = 1;
+  public eyeTune = { x: 0.155, y: 0.045, size: 34, halo: 3.1 };
   private faceLoaded = false;
   private facePendingShow = false;
   private faceBasePos = new THREE.Vector3(-1150, 1230, 350);
@@ -283,7 +289,10 @@ export class RoomMatrix {
       faceVisible: !!this.faceGroup?.visible,
       faceOpacity: this.faceOpacity.value,
       eyes: this.eyeSprites.length,
-      eyeOpacity: this.eyeMat?.opacity ?? 0,
+      eyeOpacity: this.eyeCoreMat?.opacity ?? 0,
+      eyePos: this.eyeSprites[0]
+        ? this.eyeSprites[0].position.toArray().map((v) => Math.round(v))
+        : null,
     };
   }
 
@@ -479,31 +488,15 @@ export class RoomMatrix {
         wrapper.add(occluder);
         wrapper.add(model);
 
-        // red light in the eyes: two additive glow sprites in the sockets,
-        // always drawn over the face (depthTest off) so they burn through
-        this.eyeMat = new THREE.SpriteMaterial({
-          map: this.makeEyeTexture(),
-          transparent: true,
-          blending: THREE.AdditiveBlending,
-          depthTest: false,
-          depthWrite: false,
-          opacity: 0,
-        });
-        const ex = size.x * s * this.eyeTune.x;
-        const ey = size.y * s * this.eyeTune.y;
-        const ez = size.z * s * 0.5 * this.eyeTune.z;
-        for (const sideX of [-ex, ex]) {
-          const eye = new THREE.Sprite(this.eyeMat);
-          eye.position.set(sideX, ey, ez);
-          eye.scale.setScalar(this.eyeTune.size);
-          eye.renderOrder = 4;
-          wrapper.add(eye);
-          this.eyeSprites.push(eye);
-        }
+        // red light in the eyes — seated by raycast onto the actual surface
+        this.faceModel = model;
+        this.faceSize.copy(size);
+        this.faceScale = s;
 
         wrapper.position.copy(this.faceBasePos);
         wrapper.visible = false;
         this.faceGroup = wrapper;
+        this.placeEyes();
         this.experience.scene.add(wrapper);
         this.faceLoaded = true;
         if (this.facePendingShow) this.showFace();
@@ -513,21 +506,115 @@ export class RoomMatrix {
     );
   }
 
-  /** small radial red-glow sprite texture (white-hot core → red → transparent) */
-  private makeEyeTexture(): THREE.Texture {
+  /**
+   * Radial sprite textures — hot pupil, wide red halo, and a dark SOCKET
+   * shadow that sits under the glow with normal blending: it blacks out the
+   * green face there, so the additive red reads RED instead of orange.
+   */
+  private makeEyeTexture(kind: 'core' | 'halo' | 'socket'): THREE.Texture {
+    const size = kind === 'core' ? 64 : 128;
     const cv = document.createElement('canvas');
-    cv.width = cv.height = 64;
+    cv.width = cv.height = size;
     const ctx = cv.getContext('2d')!;
-    const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-    g.addColorStop(0, 'rgba(255, 235, 235, 1)');
-    g.addColorStop(0.3, 'rgba(255, 40, 40, 0.85)');
-    g.addColorStop(0.7, 'rgba(200, 0, 0, 0.25)');
-    g.addColorStop(1, 'rgba(120, 0, 0, 0)');
+    const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    if (kind === 'core') {
+      g.addColorStop(0, 'rgba(255, 205, 190, 1)');
+      g.addColorStop(0.16, 'rgba(255, 55, 35, 0.98)');
+      g.addColorStop(0.5, 'rgba(220, 8, 8, 0.5)');
+      g.addColorStop(1, 'rgba(140, 0, 0, 0)');
+    } else if (kind === 'halo') {
+      g.addColorStop(0, 'rgba(255, 45, 30, 0.6)');
+      g.addColorStop(0.45, 'rgba(210, 0, 0, 0.22)');
+      g.addColorStop(1, 'rgba(120, 0, 0, 0)');
+    } else {
+      g.addColorStop(0, 'rgba(0, 0, 0, 0.95)');
+      g.addColorStop(0.55, 'rgba(0, 0, 0, 0.6)');
+      g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    }
     ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 64, 64);
+    ctx.fillRect(0, 0, size, size);
     const tex = new THREE.Texture(cv);
     tex.needsUpdate = true;
     return tex;
+  }
+
+  /**
+   * Seats the eyes: for each side, a ray fired from in front of the face
+   * straight back at (±x·width, +y·height from center) finds the actual
+   * surface, and the glow sits just off that point — so the lights live IN
+   * the sockets no matter how the model is shaped. Re-runnable live.
+   */
+  private placeEyes() {
+    if (!this.faceGroup || !this.faceModel) return;
+    for (const spr of this.eyeSprites) spr.parent?.remove(spr);
+    this.eyeSprites = [];
+    if (!this.eyeCoreMat || !this.eyeHaloMat || !this.eyeSocketMat) {
+      this.eyeCoreMat = new THREE.SpriteMaterial({
+        map: this.makeEyeTexture('core'),
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthTest: false,
+        depthWrite: false,
+        opacity: 0,
+      });
+      this.eyeHaloMat = new THREE.SpriteMaterial({
+        map: this.makeEyeTexture('halo'),
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthTest: false,
+        depthWrite: false,
+        opacity: 0,
+      });
+      this.eyeSocketMat = new THREE.SpriteMaterial({
+        map: this.makeEyeTexture('socket'),
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        opacity: 0,
+      });
+    }
+    const coreMat = this.eyeCoreMat;
+    const haloMat = this.eyeHaloMat;
+    const socketMat = this.eyeSocketMat;
+    this.faceGroup.updateMatrixWorld(true);
+    const w = this.faceSize.x * this.faceScale;
+    const h = this.faceSize.y * this.faceScale;
+    const d = this.faceSize.z * this.faceScale;
+    const ray = new THREE.Raycaster();
+    for (const side of [-1, 1]) {
+      const local = new THREE.Vector3(side * w * this.eyeTune.x, h * this.eyeTune.y, d);
+      const origin = local.clone().applyMatrix4(this.faceGroup.matrixWorld);
+      const dir = new THREE.Vector3(0, 0, -1).transformDirection(this.faceGroup.matrixWorld);
+      ray.set(origin, dir);
+      const hit = ray.intersectObject(this.faceModel, true)[0];
+      const pos = hit
+        ? this.faceGroup.worldToLocal(hit.point.clone())
+        : new THREE.Vector3(local.x, local.y, d * 0.3); // no hit — sensible depth
+      pos.z += 7; // just off the surface so the glow doesn't clip into it
+      const socket = new THREE.Sprite(socketMat);
+      socket.position.copy(pos);
+      socket.scale.setScalar(this.eyeTune.size * 1.9);
+      socket.renderOrder = 3; // above the face glow, below the red light
+      const core = new THREE.Sprite(coreMat);
+      core.position.copy(pos);
+      core.scale.setScalar(this.eyeTune.size);
+      core.renderOrder = 5;
+      const halo = new THREE.Sprite(haloMat);
+      halo.position.copy(pos);
+      halo.scale.setScalar(this.eyeTune.size * this.eyeTune.halo);
+      halo.renderOrder = 4;
+      this.faceGroup.add(socket);
+      this.faceGroup.add(core);
+      this.faceGroup.add(halo);
+      this.eyeSprites.push(core, halo, socket);
+    }
+  }
+
+  /** dev nudge: `__roomMatrix.setEyes({ x: 0.16, y: 0.05, size: 36 })` */
+  public setEyes(t: Partial<{ x: number; y: number; size: number; halo: number }>) {
+    Object.assign(this.eyeTune, t);
+    this.placeEyes();
+    return { ...this.eyeTune };
   }
 
   private showFace() {
@@ -641,11 +728,14 @@ export class RoomMatrix {
     this.holoScene!.add(this.holo.object);
     this.holoActive = true;
     this.showFace();
-    // each spoken line drives the OS typewriter; the end starts the countdown
+    // each spoken line drives the OS typewriter (dur = how long the voice
+    // spends on it, so the typing finishes with the words); end → countdown
     const iframeWin = () => this.experience.monitorScreen?.iframeEl?.contentWindow;
     this.holo.present(
       this.finaleLines,
-      (i) => { try { iframeWin()?.postMessage({ type: 'adminLineStart', index: i }, '*'); } catch {} },
+      (i, dur) => {
+        try { iframeWin()?.postMessage({ type: 'adminLineStart', index: i, dur }, '*'); } catch {}
+      },
       () => { try { iframeWin()?.postMessage({ type: 'adminSpeechDone' }, '*'); } catch {} }
     );
   }
@@ -795,11 +885,16 @@ export class RoomMatrix {
       const secs = elapsedMs * 0.001;
       this.faceGroup.rotation.y = Math.sin(secs * 0.5) * 0.21;
       this.faceGroup.position.y = this.faceBasePos.y + Math.sin(secs * 0.9) * 22;
-      if (this.eyeMat) {
-        this.eyeMat.opacity = this.faceOpacity.value * (0.75 + 0.25 * Math.sin(secs * 2.6));
+      if (this.eyeCoreMat && this.eyeHaloMat && this.eyeSocketMat) {
+        this.eyeCoreMat.opacity = this.faceOpacity.value * (0.82 + 0.18 * Math.sin(secs * 2.6));
+        this.eyeHaloMat.opacity = this.faceOpacity.value * (0.42 + 0.16 * Math.sin(secs * 2.6 + 0.6));
+        this.eyeSocketMat.opacity = this.faceOpacity.value * 0.85;
       }
-      const eyeScale = this.eyeTune.size * (0.92 + 0.1 * Math.sin(secs * 3.4));
-      for (const eye of this.eyeSprites) eye.scale.setScalar(eyeScale);
+      const eyePulse = 0.92 + 0.1 * Math.sin(secs * 3.4);
+      const strideScale = [1, this.eyeTune.halo, 1.9]; // core, halo, socket
+      for (let i = 0; i < this.eyeSprites.length; i++) {
+        this.eyeSprites[i].scale.setScalar(this.eyeTune.size * eyePulse * strideScale[i % 3]);
+      }
     }
 
     // hologram pass — rendered with the final (pulled) camera so it tracks
@@ -834,9 +929,14 @@ export class RoomMatrix {
       });
       this.faceMat?.dispose();
       this.faceOccluderMat?.dispose();
-      this.eyeMat?.map?.dispose();
-      this.eyeMat?.dispose();
+      this.eyeCoreMat?.map?.dispose();
+      this.eyeCoreMat?.dispose();
+      this.eyeHaloMat?.map?.dispose();
+      this.eyeHaloMat?.dispose();
+      this.eyeSocketMat?.map?.dispose();
+      this.eyeSocketMat?.dispose();
       this.eyeSprites = [];
+      this.faceModel = undefined;
       this.faceGroup = undefined;
     }
     document.getElementById('shell-glitch-svg')?.remove();

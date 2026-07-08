@@ -4,11 +4,12 @@ import { CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
 // (the face mesh lives in RoomMatrix): a big "ADMIN" floating over the head.
 // The message is typed on the OS screen and SPOKEN here, line by line, with
 // callbacks per line so the OS typewriter advances in step with the voice.
-// Voice: smoothest available (neural "Natural" voices in Edge → Google voices
-// in Chrome → any English), natural register — AI-smooth, not robot-growl —
-// over a synthesized "transmission bed" (sub hum + carrier shimmer + data
-// chirps; WebAudio, no files). The way back is the OS-side vortex, so this
-// layer has no button anymore. All text is our own.
+// Voice: Med's generated Admin clip (his own ElevenLabs asset) played through
+// WebAudio with a hardcoded cue table — each cue fires the matching typed
+// line at the exact second it is spoken. Browser TTS remains as the fallback
+// if the clip can't load. Everything rides over a synthesized "transmission
+// bed" (sub hum + carrier shimmer + data chirps; WebAudio, no files). The way
+// back is the OS-side vortex, so this layer has no button anymore.
 
 const HOLO_CSS = `
 .admin-holo {
@@ -71,6 +72,55 @@ const HOLO_CSS = `
 
 // ── synthesized transmission bed (parent-side WebAudio, no assets) ──────────
 let bedCtx: AudioContext | null = null;
+
+// ── the Admin's real voice ──────────────────────────────────────────────────
+// Cue table: L3_LINES index → the second (in the clip) its typing starts.
+// Derived by silence-gap analysis of THIS exact clip; if the voice file is
+// ever regenerated, the cues must be re-derived. Blank lines get cues too so
+// the on-screen paragraph breaks land between sentences, and the signature
+// types over the clip's tail. Played as an AudioBufferSourceNode on the bed
+// context — a running AudioContext needs no fresh user gesture.
+const VOICE_SRC = '/audio/admin_voice.mp3';
+const VOICE_CUES: { line: number; t: number }[] = [
+  { line: 0, t: 0.09 },   // WELCOME BACK, OPERATOR.
+  { line: 1, t: 1.72 },   // You have reached the final level.
+  { line: 2, t: 3.3 },
+  { line: 3, t: 3.52 },   // Dreams sold as truth.
+  { line: 4, t: 5.3 },    // Machines that pass as human.
+  { line: 5, t: 7.34 },   // And the currency every thought
+  { line: 6, t: 9.05 },   // is paid for in.
+  { line: 7, t: 9.95 },
+  { line: 8, t: 10.31 },  // Three gates. Three answers.
+  { line: 9, t: 12.51 },  // No wrong turns.
+  { line: 10, t: 13.63 },
+  { line: 11, t: 13.84 }, // Every agent, every answer,
+  { line: 12, t: 14.95 }, // every world like this one —
+  { line: 13, t: 16.01 }, // all of it runs on tokens.
+  { line: 14, t: 19.29 },
+  { line: 15, t: 19.63 }, // Spend yours on things worth building.
+  { line: 16, t: 21.62 },
+  { line: 17, t: 21.72 }, // — M.T. // ADMIN (typed over the tail, not spoken)
+];
+
+let voiceBufferPromise: Promise<AudioBuffer | null> | null = null;
+
+/** Fetch + decode the clip once per page; resolves null on any failure. */
+function loadVoiceBuffer(): Promise<AudioBuffer | null> {
+  if (voiceBufferPromise) return voiceBufferPromise;
+  voiceBufferPromise = (async () => {
+    try {
+      bedCtx = bedCtx || new AudioContext();
+      const res = await fetch(VOICE_SRC);
+      if (!res.ok) return null;
+      const ab = await res.arrayBuffer();
+      return await bedCtx.decodeAudioData(ab);
+    } catch {
+      voiceBufferPromise = null; // allow a retry on the next run
+      return null;
+    }
+  })();
+  return voiceBufferPromise;
+}
 
 function startTransmissionBed(): () => void {
   try {
@@ -183,10 +233,13 @@ export class AdminHologram {
   public object: CSS3DObject;
   private el: HTMLDivElement;
   private timers: number[] = [];
+  private pumps: number[] = [];
+  private voiceNode: AudioBufferSourceNode | null = null;
   private stopBed: (() => void) | null = null;
   private disposed = false;
 
   constructor() {
+    loadVoiceBuffer(); // start fetching/decoding during the flicker-in
     if (!document.getElementById('admin-holo-css')) {
       const style = document.createElement('style');
       style.id = 'admin-holo-css';
@@ -218,16 +271,33 @@ export class AdminHologram {
   }
 
   /**
-   * Speaks the address line by line. `onLineStart(i)` fires as each line
-   * begins (the OS types that line in step); `onDone()` fires after the last
-   * line (the OS starts the countdown). Works without TTS too: lines are then
-   * paced on timers so the experience never stalls.
+   * Speaks the address line by line. `onLineStart(i, durMs)` fires as each
+   * line begins (the OS types that line in step, paced to durMs); `onDone()`
+   * fires after the last line (the OS starts the countdown). Preferred path:
+   * Med's real voice clip with hardcoded cues. Fallbacks: browser TTS, then
+   * plain timers — the experience never stalls.
    */
-  public present(lines: string[], onLineStart: (i: number) => void, onDone: () => void) {
+  public present(
+    lines: string[],
+    onLineStart: (i: number, durMs?: number) => void,
+    onDone: () => void
+  ) {
     this.timers.push(window.setTimeout(async () => {
       if (this.disposed) return;
       this.stopBed = startTransmissionBed();
 
+      // ── path 1: the real clip (never wait on it more than 3.5s) ──────────
+      const buf = await Promise.race([
+        loadVoiceBuffer(),
+        new Promise<null>((r) => this.timers.push(window.setTimeout(() => r(null), 3500))),
+      ]);
+      if (this.disposed) return;
+      if (buf && bedCtx && bedCtx.state === 'running') {
+        this.presentFromClip(buf, lines, onLineStart, onDone);
+        return;
+      }
+
+      // ── path 2/3: browser TTS, or timers when even that is missing ───────
       const hasTTS = 'speechSynthesis' in window;
       if (hasTTS) {
         await voicesReady();
@@ -244,8 +314,8 @@ export class AdminHologram {
         const text = lines[i];
         // blanks and the signature are typed, not spoken
         if (!text || text.startsWith('—') || !hasTTS) {
-          onLineStart(i);
           const pause = !text ? 380 : 500 + text.length * 52;
+          onLineStart(i, pause);
           this.timers.push(window.setTimeout(next, pause));
           return;
         }
@@ -270,9 +340,10 @@ export class AdminHologram {
         u.onend = () => advance(200);
         u.onerror = () => advance(350);
         // drive the typing NOW — onstart is unreliable for some voices
-        onLineStart(i);
         const words = Math.max(1, text.trim().split(/\s+/).length);
-        this.timers.push(window.setTimeout(() => advance(0), 700 + (words / 2.4) * 1000 + 900));
+        const estMs = (words / 2.4) * 1000;
+        onLineStart(i, estMs);
+        this.timers.push(window.setTimeout(() => advance(0), 700 + estMs + 900));
         window.speechSynthesis.speak(u);
       };
       next();
@@ -284,8 +355,67 @@ export class AdminHologram {
     }, 1100)); // after the flicker-in
   }
 
+  /**
+   * Plays the real clip and fires each line's cue off the AUDIO CLOCK
+   * (ctx.currentTime), so typing stays locked to the voice even if the tab
+   * throttles timers. Cue pump is an interval, not rAF — rAF freezes in
+   * hidden tabs and the audio keeps playing without it.
+   */
+  private presentFromClip(
+    buf: AudioBuffer,
+    lines: string[],
+    onLineStart: (i: number, durMs?: number) => void,
+    onDone: () => void
+  ) {
+    const c = bedCtx!;
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    const g = c.createGain();
+    g.gain.value = 1.0;
+    const comp = c.createDynamicsCompressor();
+    src.connect(g).connect(comp).connect(c.destination);
+    const t0 = c.currentTime + 0.06;
+    src.start(t0);
+    this.voiceNode = src;
+
+    const cues = VOICE_CUES.filter((q) => q.line < lines.length);
+    let ci = 0;
+    let done = false;
+    const finish = () => {
+      if (done || this.disposed) return;
+      done = true;
+      // reveal anything still pending, then hand over to the countdown
+      while (ci < cues.length) onLineStart(cues[ci++].line, 200);
+      onDone();
+    };
+    const pump = window.setInterval(() => {
+      if (this.disposed) { clearInterval(pump); return; }
+      const at = c.currentTime - t0;
+      while (ci < cues.length && at >= cues[ci].t) {
+        const q = cues[ci];
+        const nextT = ci + 1 < cues.length ? cues[ci + 1].t : buf.duration;
+        onLineStart(q.line, Math.max(220, (nextT - q.t) * 1000));
+        ci++;
+      }
+      if (at >= buf.duration + 0.45) { clearInterval(pump); finish(); }
+    }, 30);
+    this.pumps.push(pump);
+    src.onended = () => {
+      src.disconnect();
+      g.disconnect();
+      comp.disconnect();
+      this.timers.push(window.setTimeout(finish, 450));
+    };
+    // absolute safety net
+    this.timers.push(window.setTimeout(finish, (buf.duration + 4) * 1000));
+  }
+
   private stopAudio() {
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    try { this.voiceNode?.stop(); } catch {}
+    this.voiceNode = null;
+    this.pumps.forEach(clearInterval);
+    this.pumps = [];
     this.stopBed?.();
     this.stopBed = null;
   }
