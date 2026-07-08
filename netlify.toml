@@ -1,0 +1,12 @@
+# Netlify deploy config — the site is the Vite + React app in ./app
+[build]
+  base = "app"              # run the build from the app/ subdirectory
+  command = "npm run build" # tsc -b && vite build
+  publish = "dist"          # output (resolved as app/dist)
+
+# SPA fallback: serve index.html for every path so React Router owns routing.
+# Without this, deep links like /os and any page refresh would 404.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

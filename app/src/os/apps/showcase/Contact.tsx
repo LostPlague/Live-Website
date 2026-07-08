@@ -92,7 +92,7 @@ const Contact: React.FC<ContactProps> = () => {
         setFormMessageColor(Colors.blue);
         setIsLoading(false);
       } else {
-        setFormMessage(data.error);
+        setFormMessage(data.error || 'Submission failed, please try again.');
         setFormMessageColor(Colors.red);
         setIsLoading(false);
       }

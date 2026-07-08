@@ -54,7 +54,7 @@ export class AudioManager {
       ccType: '/audio/type.mp3',
     };
 
-    const loadAudioPromise = (key: string, path: string): Promise<AudioBuffer> => {
+    const loadAudioPromise = (_key: string, path: string): Promise<AudioBuffer> => {
       return new Promise((resolve, reject) => {
         this.loader.load(
           path,

@@ -61,7 +61,7 @@ export class World {
       decor: '/models/decor.glb',
     };
 
-    const loadTexturePromise = (key: string, path: string): Promise<THREE.Texture> => {
+    const loadTexturePromise = (_key: string, path: string): Promise<THREE.Texture> => {
       return new Promise((resolve, reject) => {
         textureLoader.load(
           path,

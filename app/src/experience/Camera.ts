@@ -164,7 +164,7 @@ export class Camera {
     }, 0);
   }
 
-  public update(elapsed: number, dt: number) {
+  public update(elapsed: number, _dt: number) {
     // Henry's pattern: freeCam flag short-circuits everything else
     if (this.freeCam && this.controls) {
       this.position.copy(this.controls.object.position);
