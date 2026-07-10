@@ -1,6 +1,7 @@
 import React from 'react';
 import ResumeDownload from './ResumeDownload';
 import type { StyleSheetCSS } from './types';
+import { track } from '../../../analytics';
 
 // Structure ported from Henry's components/showcase/Experience.tsx (company h1
 // + website h4 / role h3 + bold dates / bulleted body). Deltas per Med:
@@ -104,7 +105,8 @@ const Experience: React.FC<ExperienceProps> = () => {
                 <div style={styles.headerRow}>
                   <h1>{job.company}</h1>
                   {job.websiteHref && (
-                    <a rel="noreferrer" target="_blank" href={job.websiteHref}>
+                    <a rel="noreferrer" target="_blank" href={job.websiteHref}
+                      onClick={() => track('link_clicked', { target: 'job-site', company: job.company })}>
                       <h4>{job.websiteLabel}</h4>
                     </a>
                   )}

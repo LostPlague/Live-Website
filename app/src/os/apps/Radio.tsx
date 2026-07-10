@@ -16,18 +16,29 @@ export interface RadioProps {
 
 const Radio: React.FC<RadioProps> = (props) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const listenStartRef = useRef<number | null>(null);
   const [status, setStatus] = useState<'stopped' | 'buffering' | 'playing'>('stopped');
   const [volume, setVolume] = useState(0.8);
+
+  // how long the stream actually played (start → stop/close), in seconds
+  const flushListen = () => {
+    if (listenStartRef.current == null) return;
+    const seconds = Math.round((Date.now() - listenStartRef.current) / 1000);
+    listenStartRef.current = null;
+    if (seconds > 0) track('radio_listened', { seconds });
+  };
 
   useEffect(() => {
     return () => {
       // stop the stream when the window closes
+      flushListen();
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.src = '';
         audioRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const play = () => {
@@ -40,10 +51,12 @@ const Radio: React.FC<RadioProps> = (props) => {
     }
     setStatus('buffering');
     track('radio_play');
-    audioRef.current.play().catch(() => setStatus('stopped'));
+    listenStartRef.current = Date.now();
+    audioRef.current.play().catch(() => { setStatus('stopped'); listenStartRef.current = null; });
   };
 
   const stop = () => {
+    flushListen();
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.src = '';

@@ -80,6 +80,7 @@ const SecretFiles: React.FC<SecretFilesProps> = (props) => {
   const [denied, setDenied] = useState(false);
   const [typed, setTyped] = useState<string[]>([]);
   const [typedDone, setTypedDone] = useState(false);
+  const stageT0 = useRef(Date.now()); // time-to-crack clock, reset per level
 
   // funnel: they opened the Secret Files
   useEffect(() => { track('secret_opened'); }, []);
@@ -113,9 +114,10 @@ const SecretFiles: React.FC<SecretFilesProps> = (props) => {
 
   const tryStage1 = () => {
     if (A1.test(attempt.trim())) {
-      track('secret_stage_passed', { stage: 'hallucination', order: 1 });
+      track('secret_stage_passed', { stage: 'hallucination', order: 1, seconds: Math.round((Date.now() - stageT0.current) / 1000) });
       playAccessChirp();
       setAttempt('');
+      stageT0.current = Date.now(); // level 2's clock starts now
       setStage('s1');
     } else {
       track('secret_wrong_answer', { stage: 'hallucination' });
@@ -125,7 +127,7 @@ const SecretFiles: React.FC<SecretFilesProps> = (props) => {
 
   const tryStage2 = () => {
     if (A2.test(attempt.trim())) {
-      track('secret_stage_passed', { stage: 'turing', order: 2 });
+      track('secret_stage_passed', { stage: 'turing', order: 2, seconds: Math.round((Date.now() - stageT0.current) / 1000) });
       setAttempt('');
       props.onEnterMatrix();
     } else {

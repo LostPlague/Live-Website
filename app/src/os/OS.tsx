@@ -86,8 +86,9 @@ export const OS: React.FC = () => {
   }, []);
 
   // if the tab closes with apps still open, flush their time-spent durations
+  // (beacon transport — a plain capture gets killed mid-flight on unload)
   useEffect(() => {
-    const onLeave = () => flushOpenApps();
+    const onLeave = () => flushOpenApps(true);
     window.addEventListener('pagehide', onLeave);
     return () => window.removeEventListener('pagehide', onLeave);
   }, []);

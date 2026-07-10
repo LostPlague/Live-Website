@@ -1,6 +1,7 @@
-import React from 'react';
-import { Routes, Route } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import { Window } from '../../components/Window';
+import { trackSectionEnter, flushSection } from '../../../analytics';
 import windowExplorerIcon from '../../assets/windowExplorerIcon.png';
 import Home from './Home';
 import About from './About';
@@ -25,6 +26,15 @@ const ShowcaseExplorer: React.FC<ShowcaseExplorerProps> = (props) => {
   // Henry's useInitialWindowSize({ margin: 100 })
   const initWidth = window.innerWidth - 100;
   const initHeight = window.innerHeight - 100;
+
+  // Section reading time: pages are routes, so the pathname IS the section.
+  // Enter starts the clock; route change / window close / tab close flush it.
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const section = pathname.replace(/^\/os\/?/, '').replace(/\/$/, '') || 'home';
+    trackSectionEnter(section);
+  }, [pathname]);
+  useEffect(() => () => flushSection(), []);
 
   return (
     <Window

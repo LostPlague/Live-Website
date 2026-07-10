@@ -22,11 +22,12 @@ const validateEmail = (email: string) => {
 interface SocialBoxProps {
   icon: string;
   link: string;
+  onClick?: () => void;
 }
 
-const SocialBox: React.FC<SocialBoxProps> = ({ link, icon }) => {
+const SocialBox: React.FC<SocialBoxProps> = ({ link, icon, onClick }) => {
   return (
-    <a rel="noreferrer" target="_blank" href={link}>
+    <a rel="noreferrer" target="_blank" href={link} onClick={onClick}>
       <div className="big-button-container" style={styles.social}>
         <img src={icon} alt="" style={styles.socialImage} />
       </div>
@@ -126,6 +127,7 @@ const Contact: React.FC<ContactProps> = () => {
           <SocialBox
             icon={inIcon}
             link={'https://www.linkedin.com/in/mohamed-tabari/'}
+            onClick={() => track('link_clicked', { target: 'linkedin' })}
           />
         </div>
       </div>
@@ -146,7 +148,7 @@ const Contact: React.FC<ContactProps> = () => {
         <br />
         <p>
           <b>Email: </b>
-          <a href="mailto:mohameddtabari@gmail.com">
+          <a href="mailto:mohameddtabari@gmail.com" onClick={() => track('link_clicked', { target: 'email' })}>
             mohameddtabari@gmail.com
           </a>
         </p>

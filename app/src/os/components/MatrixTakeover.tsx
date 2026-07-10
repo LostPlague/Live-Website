@@ -794,8 +794,10 @@ const MatrixScreen: React.FC<{
 
   // the way out fades in after the screen has sunk in (level 2 only —
   // level 3 hands control to the room and the Admin)
+  const l3StartRef = useRef(Date.now()); // time-to-crack clock for the final gate
   useEffect(() => {
     if (level !== 2) return;
+    l3StartRef.current = Date.now();
     const t = setTimeout(() => setBtnOn(true), 2200);
     return () => clearTimeout(t);
   }, [level]);
@@ -803,7 +805,7 @@ const MatrixScreen: React.FC<{
   const tryFinal = () => {
     if (revokedRef.current) return;
     if (A3.test(attemptRef.current.trim())) {
-      track('secret_stage_passed', { stage: 'tokens', order: 3 });
+      track('secret_stage_passed', { stage: 'tokens', order: 3, seconds: Math.round((Date.now() - l3StartRef.current) / 1000) });
       playFinaleRiser(); // fire inside the click gesture; the room syncs to it
       onFinalUnlock();
       return;
