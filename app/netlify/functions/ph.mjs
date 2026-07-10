@@ -29,8 +29,9 @@ const BASE =
   `properties.$host NOT LIKE 'localhost%' AND properties.$host NOT LIKE '%.netlify.app%'` +
   ` AND event != '__verify_test__' AND timestamp >= ${EPOCH}`;
 
-// What makes a person a real human (evaluated per person over all their events).
-const HUMAN = `(
+// What makes a person a real human (evaluated per person over all their events):
+// they ENGAGED like a person AND carry no headless-renderer fingerprint.
+const ENGAGED = `(
      countIf(event = 'experience_started') > 0
   OR countIf(event = 'resume_downloaded') > 0
   OR countIf(event LIKE 'secret_%') > 0
@@ -41,6 +42,15 @@ const HUMAN = `(
   OR uniqIf(properties.app, event = 'app_opened') >= 2
   OR countIf(event NOT LIKE '$%') >= 6
 )`;
+// Renderer bots (e.g. Google's indexer from Council Bluffs) DO click prominent
+// buttons, so engagement alone isn't proof. No real person can trip these:
+// browsers always report a real timezone, and no real device has a perfectly
+// square screen (1024×1024 is a headless viewport default).
+const BOTLIKE = `(
+     countIf(properties.$timezone = 'Etc/Unknown') > 0
+  OR countIf(toFloat(properties.$screen_width) > 0 AND properties.$screen_width = properties.$screen_height) > 0
+)`;
+const HUMAN = `(${ENGAGED} AND NOT ${BOTLIKE})`;
 const OWNER = `(countIf(properties.is_owner = true) > 0 OR countIf(distinct_id = 'owner') > 0)`;
 
 // Person set used to scope every stat to engaged, non-owner humans.
