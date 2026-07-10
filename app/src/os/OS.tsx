@@ -6,7 +6,7 @@ import Radio from './apps/Radio';
 import SecretFiles from './apps/SecretFiles';
 import { Window } from './components/Window';
 import MatrixTakeover, { type MatrixPhase } from './components/MatrixTakeover';
-import { track, trackAppOpen, trackAppClose, flushOpenApps } from '../analytics';
+import { track, trackAppOpen, trackAppClose, flushOpenApps, trackAppFocus, trackAppMinimize, hoverHandlers } from '../analytics';
 import './os.css';
 import windowsStartIcon from './assets/windowsStartIcon.png';
 import volumeOn from './assets/volumeOn.png';
@@ -93,6 +93,21 @@ export const OS: React.FC = () => {
     return () => window.removeEventListener('pagehide', onLeave);
   }, []);
 
+  // focused-time accounting: the app actually being LOOKED AT is the top
+  // non-minimized window — report every change of that to analytics.
+  const focusedRef = useRef<string | null>(null);
+  useEffect(() => {
+    let topKey: string | null = null;
+    let topZ = -1;
+    Object.keys(windows).forEach(k => {
+      if (!windows[k].minimized && windows[k].zIndex > topZ) { topZ = windows[k].zIndex; topKey = k; }
+    });
+    if (topKey !== focusedRef.current) {
+      focusedRef.current = topKey;
+      trackAppFocus(topKey);
+    }
+  }, [windows]);
+
   // dev-only hooks for automated verification (mirrors the shell's __roomMatrix)
   useEffect(() => {
     if ((import.meta as any).env?.DEV) {
@@ -176,8 +191,11 @@ export const OS: React.FC = () => {
     return () => window.removeEventListener('mousedown', onCheckClick, false);
   }, []);
 
-  const toggleStartMenu = () => { lastClickInside.current = !startMenuOpen; };
-  const handleShutdown = () => { setStartMenuOpen(false); /* cosmetic */ };
+  const toggleStartMenu = () => {
+    if (!startMenuOpen) track('start_menu_opened');
+    lastClickInside.current = !startMenuOpen;
+  };
+  const handleShutdown = () => { track('shutdown_clicked'); setStartMenuOpen(false); /* cosmetic */ };
 
   // click-outside deselect (attach to window mousedown)
   useEffect(() => {
@@ -197,9 +215,12 @@ export const OS: React.FC = () => {
     return max;
   };
 
+  // NOTE: analytics calls live OUTSIDE the setWindows updaters — React runs
+  // updaters twice under StrictMode (and may re-run them in concurrent mode),
+  // which double-counted opens/closes when the track call sat inside.
   const openWindow = (key: string, name: string, icon: string, iconImg?: string) => {
+    if (!windows[key]) trackAppOpen(key); // count first open, not re-focus
     setWindows(prev => {
-      if (!prev[key]) trackAppOpen(key); // count first open, not re-focus
       let max = 0;
       Object.keys(prev).forEach(k => { if (prev[k].zIndex > max) max = prev[k].zIndex; });
       return {
@@ -210,8 +231,8 @@ export const OS: React.FC = () => {
   };
 
   const closeWindow = (key: string) => {
+    if (windows[key]) trackAppClose(key);
     setWindows(prev => {
-      if (prev[key]) trackAppClose(key);
       const n = { ...prev };
       delete n[key];
       return n;
@@ -219,6 +240,7 @@ export const OS: React.FC = () => {
   };
 
   const minimizeWindow = (key: string) => {
+    trackAppMinimize(key);
     setWindows(prev => ({ ...prev, [key]: { ...prev[key], minimized: true } }));
   };
 
@@ -290,7 +312,7 @@ export const OS: React.FC = () => {
       <div className="os-shortcuts">
         {shortcuts.filter(sc => !(sc.key === 'secret' && secretVanished)).map((sc, i) => (
           <div key={sc.key} style={{ position: 'absolute', top: i * 104 }}>
-            <div className="os-shortcut" onMouseDown={() => handleShortcutClick(sc.key, sc.open)}>
+            <div className="os-shortcut" onMouseDown={() => handleShortcutClick(sc.key, sc.open)} {...hoverHandlers(`icon-${sc.key}`)}>
               <div className="os-shortcut-icon-container">
                 {selectedShortcut === sc.key && (
                   <div className="os-shortcut-icon-overlay os-shortcut-selected-overlay" />

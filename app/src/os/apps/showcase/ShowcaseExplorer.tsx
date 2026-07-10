@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { Window } from '../../components/Window';
-import { trackSectionEnter, flushSection } from '../../../analytics';
+import { trackSectionEnter, flushSection, updateSectionScroll } from '../../../analytics';
 import windowExplorerIcon from '../../assets/windowExplorerIcon.png';
 import Home from './Home';
 import About from './About';
@@ -48,7 +48,18 @@ const ShowcaseExplorer: React.FC<ShowcaseExplorerProps> = (props) => {
       onMinimize={props.onMinimize}
       bottomLeftText={'© Copyright 2025 Mohamed Tabari'}
     >
-      <div className="site-page">
+      <div
+        className="site-page"
+        // scroll events don't bubble but DO capture — one listener covers
+        // whichever inner container actually scrolls. Records the deepest
+        // point reached in the active section (0–100%).
+        onScrollCapture={(e) => {
+          const el = e.target as HTMLElement;
+          if (el && el.scrollHeight > el.clientHeight) {
+            updateSectionScroll(Math.round(((el.scrollTop + el.clientHeight) / el.scrollHeight) * 100));
+          }
+        }}
+      >
         <VerticalNavbar />
         <Routes>
           <Route index element={<Home />} />

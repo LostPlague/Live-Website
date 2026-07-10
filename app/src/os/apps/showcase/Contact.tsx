@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import inIcon from '../../assets/showcase/contact-in.png';
 import ResumeDownload from './ResumeDownload';
 import type { StyleSheetCSS } from './types';
-import { track } from '../../../analytics';
+import { track, hoverHandlers } from '../../../analytics';
 
 // Ported verbatim from Henry's components/showcase/Contact.tsx
 
@@ -27,7 +27,7 @@ interface SocialBoxProps {
 
 const SocialBox: React.FC<SocialBoxProps> = ({ link, icon, onClick }) => {
   return (
-    <a rel="noreferrer" target="_blank" href={link} onClick={onClick}>
+    <a rel="noreferrer" target="_blank" href={link} onClick={onClick} {...hoverHandlers('linkedin')}>
       <div className="big-button-container" style={styles.social}>
         <img src={icon} alt="" style={styles.socialImage} />
       </div>
@@ -148,7 +148,7 @@ const Contact: React.FC<ContactProps> = () => {
         <br />
         <p>
           <b>Email: </b>
-          <a href="mailto:mohameddtabari@gmail.com" onClick={() => track('link_clicked', { target: 'email' })}>
+          <a href="mailto:mohameddtabari@gmail.com" onClick={() => track('link_clicked', { target: 'email' })} {...hoverHandlers('email')}>
             mohameddtabari@gmail.com
           </a>
         </p>
@@ -215,6 +215,7 @@ const Contact: React.FC<ContactProps> = () => {
               type="submit"
               disabled={!isFormValid || isLoading}
               onMouseDown={submitForm}
+              {...hoverHandlers('contact-send')}
             >
               {!isLoading ? 'Send Message' : <p className="loading">Sending</p>}
             </button>

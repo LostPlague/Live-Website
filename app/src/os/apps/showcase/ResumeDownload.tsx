@@ -2,7 +2,7 @@ import React from 'react';
 import printer from '../../assets/showcase/printer.gif';
 import Resume from '../../assets/showcase/Mohamed_Tabari_Resume.pdf';
 import type { StyleSheetCSS } from './types';
-import { track } from '../../../analytics';
+import { track, hoverHandlers } from '../../../analytics';
 
 // Ported verbatim from Henry's components/showcase/ResumeDownload.tsx
 
@@ -21,6 +21,7 @@ const ResumeDownload: React.FC<ResumeDownloadProps> = ({ altText }) => {
           target="_blank"
           href={Resume}
           onClick={() => track('resume_downloaded', { source: altText || 'showcase' })}
+          {...hoverHandlers('resume')}
         >
           <p>Click here to download it!</p>
         </a>

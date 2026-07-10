@@ -143,11 +143,16 @@ export const Minesweeper: React.FC = () => {
   const [flagsUsed, setFlagsUsed] = useState(0);
   const [timer, setTimer] = useState(0);
   const minesPlacedRef = useRef(false);
+  const clicksRef = useRef(0);   // reveal attempts this game
+  const gameNoRef = useRef(1);   // nth game this window (restarts)
 
-  // report the outcome (with time played) when a game ends
+  // report the outcome (with time played + how they played) when a game ends
   useEffect(() => {
     if (status === 'won' || status === 'lost') {
-      track('minesweeper_result', { result: status, seconds: timer });
+      track('minesweeper_result', {
+        result: status, seconds: timer,
+        clicks: clicksRef.current, flags: flagsUsed, game: gameNoRef.current,
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
@@ -173,6 +178,7 @@ export const Minesweeper: React.FC = () => {
     // Can't click revealed or flagged cells
     if (cell.state === 'revealed' || cell.state === 'flagged') return;
 
+    clicksRef.current += 1;
     fireClick();
 
     // First click: place mines (guaranteeing safe first click)
@@ -251,6 +257,8 @@ export const Minesweeper: React.FC = () => {
     setFlagsUsed(0);
     setTimer(0);
     minesPlacedRef.current = false;
+    clicksRef.current = 0;
+    gameNoRef.current += 1;
     fireClick();
   }, []);
 

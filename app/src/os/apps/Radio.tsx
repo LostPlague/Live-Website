@@ -17,15 +17,27 @@ export interface RadioProps {
 const Radio: React.FC<RadioProps> = (props) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const listenStartRef = useRef<number | null>(null);
+  const volAdjustsRef = useRef(0);
+  const lastVolAtRef = useRef(0);
   const [status, setStatus] = useState<'stopped' | 'buffering' | 'playing'>('stopped');
   const [volume, setVolume] = useState(0.8);
+  const volumeRef = useRef(volume);
 
-  // how long the stream actually played (start → stop/close), in seconds
+  // how long the stream actually played (start → stop/close), in seconds —
+  // plus how they treated the volume (adjust bursts, final level, mute)
   const flushListen = () => {
     if (listenStartRef.current == null) return;
     const seconds = Math.round((Date.now() - listenStartRef.current) / 1000);
     listenStartRef.current = null;
-    if (seconds > 0) track('radio_listened', { seconds });
+    if (seconds > 0) {
+      track('radio_listened', {
+        seconds,
+        endVolume: Math.round(volumeRef.current * 100) / 100,
+        volumeAdjusts: volAdjustsRef.current || undefined,
+        muted: volumeRef.current === 0 || undefined,
+      });
+    }
+    volAdjustsRef.current = 0;
   };
 
   useEffect(() => {
@@ -67,7 +79,12 @@ const Radio: React.FC<RadioProps> = (props) => {
 
   const onVolume = (v: number) => {
     setVolume(v);
+    volumeRef.current = v;
     if (audioRef.current) audioRef.current.volume = v;
+    // a slider drag fires dozens of change events — count bursts, not steps
+    const now = Date.now();
+    if (now - lastVolAtRef.current > 800) volAdjustsRef.current += 1;
+    lastVolAtRef.current = now;
   };
 
   return (

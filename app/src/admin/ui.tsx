@@ -41,12 +41,21 @@ export interface ChallengeData {
   winners: Row[];
 }
 export interface ContentData {
-  apps: Row[]; sections: Row[]; links: Row[];
-  media: { radioPlays: number; radioSeconds: number; mineGames: number; mineWins: number; mineAvgWin: number };
+  apps: Row[]; sections: Row[]; links: Row[]; hesitation: Row[];
+  media: {
+    radioPlays: number; radioSeconds: number; mineGames: number; mineWins: number;
+    mineAvgWin: number; mineAvgClicks: number; mineAvgFlags: number;
+  };
+  room: {
+    introAvg: number; wideAvg: number; deskAvg: number; monitorAvg: number; orbitAvg: number;
+    afkAvg: number; played: number; summaries: number; starts: number; abandons: number;
+  };
+  hesitationConv: Record<string, number>;
 }
 export interface SystemData {
-  devices: Row[]; browsers: Row[]; oses: Row[]; screens: Row[]; heat: Row[]; tz: string;
+  devices: Row[]; browsers: Row[]; oses: Row[]; screens: Row[]; heat: Row[]; tz: string; topErrors: Row[];
   vitals: { lcp: number; fcp: number; cls: number; inp: number; samples: number };
+  perf: { fpsAvg: number; fpsMin: number; fpsSamples: number; rage: number; dead: number; errors: number; webglFails: number };
 }
 
 // ── palette (validated against #0b1626, dark band, CVD-safe order) ──────────
@@ -153,6 +162,10 @@ export const EV_ICON: Record<string, string> = {
   secret_opened: 'lock', secret_stage_passed: 'puzzle', secret_wrong_answer: 'x',
   secret_gave_up: 'door', secret_failed: 'skull', section_viewed: 'file',
   link_clicked: 'link', $pageview: 'eye', $pageleave: 'out',
+  element_hovered: 'eye', room_summary: 'globe', experience_abandoned: 'door',
+  fps_sample: 'pulse', js_error: 'skull', webgl_failed: 'x',
+  start_menu_opened: 'window', shutdown_clicked: 'out',
+  $rageclick: 'x', $dead_click: 'x',
 };
 export const TROPHY_EV = new Set(['resume_downloaded', 'secret_completed', 'contact_submitted', 'link_clicked']);
 export const STAGE_NO: Record<string, number> = { hallucination: 1, turing: 2, tokens: 3 };

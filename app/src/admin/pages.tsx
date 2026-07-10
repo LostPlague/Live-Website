@@ -23,6 +23,10 @@ const eventMeta = (r: Row): string => {
   if (ev === 'link_clicked') return String(r[9] || '');
   if (ev === 'radio_listened') return seconds != null ? `listened ${secs(seconds)}` : '';
   if (ev === 'minesweeper_result') return seconds != null ? `${secs(seconds)}` : '';
+  if (ev === 'element_hovered') return `${r[9] || ''}${seconds != null ? ` · lingered ${seconds}s` : ''}`;
+  if (ev === 'experience_abandoned') return seconds != null ? `left after ${secs(seconds)}` : '';
+  if (ev === 'room_summary') return 'room visit recap';
+  if (ev === 'js_error') return 'error in page';
   if (ev === '$pageview' && r[6]) { try { return new URL(String(r[6])).pathname; } catch { return ''; } }
   return '';
 };
@@ -463,10 +467,64 @@ export const ChallengePage: React.FC<{ d: ChallengeData; visitors: Visitor[]; on
   };
 
 // ── CONTENT ──────────────────────────────────────────────────────────────────
+const HOVER_LABEL: Record<string, string> = {
+  'start-button': 'Start button', resume: 'Resume link', 'contact-send': 'Send message',
+  linkedin: 'LinkedIn', email: 'Email address',
+  'icon-showcase': 'Showcase icon', 'icon-browser': 'Browser icon', 'icon-radio': 'Radio icon',
+  'icon-minesweeper': 'Minesweeper icon', 'icon-secret': 'Secret Files icon',
+};
+
 export const ContentPage: React.FC<{ d: ContentData }> = ({ d }) => {
   const m = d.media;
+  const r = d.room;
+  const loaded = r.starts + r.abandons;
+  const startRate = loaded ? Math.round((r.starts / loaded) * 100) : 0;
+  const playedRate = r.summaries ? Math.round((r.played / r.summaries) * 100) : 0;
+  const roomBars: Row[] = [
+    ['At the desk', Math.round(r.deskAvg)], ['On the monitor (OS)', Math.round(r.monitorAvg)],
+    ['Wide view', Math.round(r.wideAvg)], ['Free-look orbit', Math.round(r.orbitAvg)],
+  ].filter((row) => Number(row[1]) > 0) as Row[];
   return (
     <div className="cc-grid">
+      <Card span={7} title="The 3D room" right={<span className="cc-count">camera journey · averages per visit</span>}>
+        {r.summaries === 0 && loaded === 0 ? (
+          <Empty icon="globe" text="No room visits in this range yet." sub="Tracks intro dwell, camera views, orbit play and AFK time." />
+        ) : (
+          <>
+            <div className="cc-stat-pair" style={{ marginBottom: 14 }}>
+              <div><p className="cc-stat-big">{startRate}<span className="cc-stat-of">%</span></p><p className="cc-stat-sub">clicked Start · {r.abandons} left at the intro</p></div>
+              <div><p className="cc-stat-big">{r.introAvg > 0 ? secs(r.introAvg) : '—'}</p><p className="cc-stat-sub">avg wait before Start</p></div>
+              <div><p className="cc-stat-big">{playedRate}<span className="cc-stat-of">%</span></p><p className="cc-stat-sub">played with the room</p></div>
+              <div><p className="cc-stat-big">{r.afkAvg > 0 ? secs(r.afkAvg) : '0s'}</p><p className="cc-stat-sub">avg AFK time</p></div>
+            </div>
+            {roomBars.length > 0 && <HBars rows={roomBars} format={(v) => secs(v)} />}
+          </>
+        )}
+      </Card>
+
+      <Card span={5} title="Hesitation" right={<span className="cc-count">lingered on it — did they act?</span>}>
+        {d.hesitation.length === 0 ? (
+          <Empty icon="eye" text="No lingering hovers recorded yet." sub="A hover counts after 600ms on a meaningful button." />
+        ) : (
+          <table className="cc-table">
+            <thead><tr><th>Element</th><th>Hovered</th><th>Dwell</th><th>Acted</th></tr></thead>
+            <tbody>
+              {d.hesitation.map((h, i) => {
+                const t = String(h[0]);
+                const conv = d.hesitationConv[t];
+                return (
+                  <tr key={i}>
+                    <td className="cc-strong">{HOVER_LABEL[t] || t}</td>
+                    <td>{String(h[1])} {Number(h[1]) === 1 ? 'person' : 'people'}</td>
+                    <td>{secs(Number(h[2]))}</td>
+                    <td>{conv != null ? `${conv} did` : '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </Card>
       <Card span={7} title="Apps" right={<span className="cc-count">opens · people · time inside</span>}>
         {d.apps.length === 0 ? <Empty icon="window" text="No app activity in this range yet." /> : (
           <table className="cc-table">
@@ -512,6 +570,9 @@ export const ContentPage: React.FC<{ d: ContentData }> = ({ d }) => {
           <div><p className="cc-stat-big">{m.mineWins}<span className="cc-stat-of">/{m.mineGames}</span></p><p className="cc-stat-sub">games won</p></div>
           <div><p className="cc-stat-big">{m.mineAvgWin > 0 ? secs(m.mineAvgWin) : '—'}</p><p className="cc-stat-sub">avg winning time</p></div>
         </div>
+        {m.mineAvgClicks > 0 && (
+          <p className="cc-hint">{Math.round(m.mineAvgClicks)} clicks · {Math.round(m.mineAvgFlags)} flags per game on average.</p>
+        )}
       </Card>
     </div>
   );
@@ -527,12 +588,15 @@ const VITAL_RATING: Record<string, (v: number) => 'good' | 'mid' | 'bad'> = {
 
 export const SystemPage: React.FC<{ d: SystemData }> = ({ d }) => {
   const v = d.vitals;
+  const p = d.perf;
   const vital = (key: 'lcp' | 'fcp' | 'cls' | 'inp', label: string, val: number, shown: string) => (
     <div className="cc-vital">
       <p className="cc-stat-sub">{label}</p>
       <p className={`cc-stat-big cc-vital-${v.samples ? VITAL_RATING[key](val) : 'none'}`}>{v.samples ? shown : '—'}</p>
     </div>
   );
+  const fpsTone = (fps: number) => (fps >= 50 ? 'good' : fps >= 30 ? 'mid' : 'bad');
+  const countTone = (n: number) => (n === 0 ? 'good' : 'bad');
   return (
     <div className="cc-grid">
       <Card span={4} title="Devices"><Donut rows={d.devices} /></Card>
@@ -549,6 +613,33 @@ export const SystemPage: React.FC<{ d: SystemData }> = ({ d }) => {
           {vital('inp', 'Input delay', v.inp, `${Math.round(v.inp)}ms`)}
         </div>
         <p className="cc-hint">Green = good per Google Web Vitals thresholds; amber = needs improvement; red = poor.</p>
+      </Card>
+
+      <Card span={7} title="3D stability &amp; frustration" right={<span className="cc-count">{p.fpsSamples} FPS samples</span>}>
+        <div className="cc-vitals">
+          <div className="cc-vital"><p className="cc-stat-sub">Avg frame rate</p>
+            <p className={`cc-stat-big cc-vital-${p.fpsSamples ? fpsTone(p.fpsAvg) : 'none'}`}>{p.fpsSamples ? `${p.fpsAvg} fps` : '—'}</p></div>
+          <div className="cc-vital"><p className="cc-stat-sub">Worst second</p>
+            <p className={`cc-stat-big cc-vital-${p.fpsSamples ? fpsTone(p.fpsMin) : 'none'}`}>{p.fpsSamples ? `${p.fpsMin} fps` : '—'}</p></div>
+          <div className="cc-vital"><p className="cc-stat-sub">Rage clicks</p>
+            <p className={`cc-stat-big cc-vital-${countTone(p.rage)}`}>{p.rage}</p></div>
+          <div className="cc-vital"><p className="cc-stat-sub">Dead clicks</p>
+            <p className={`cc-stat-big cc-vital-${countTone(p.dead)}`}>{p.dead}</p></div>
+        </div>
+        <p className="cc-hint">Rage = 3+ fast clicks in one spot (frustration). Dead = a click that visibly did nothing.</p>
+      </Card>
+
+      <Card span={5} title="Errors" right={<span className="cc-count">{p.webglFails} WebGL failures</span>}>
+        {p.errors === 0 ? (
+          <Empty icon="spark" text="Zero JavaScript errors in this range." sub="The site is running clean." />
+        ) : (
+          <>
+            <p className="cc-stat-big cc-vital-bad" style={{ marginBottom: 10 }}>{p.errors}</p>
+            {d.topErrors.map((e, i) => (
+              <p key={i} className="cc-hint cc-mono" style={{ marginTop: 4 }}>{String(e[1])}× — {String(e[0]).slice(0, 90)}</p>
+            ))}
+          </>
+        )}
       </Card>
 
       <Card span={12} title="When people visit" right={<span className="cc-count">events by hour × weekday</span>}>

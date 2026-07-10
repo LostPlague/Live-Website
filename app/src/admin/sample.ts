@@ -134,7 +134,16 @@ export const S_CONTENT: ContentData = {
     ['home', 12, 8, 420, 35], ['contact', 5, 4, 240, 48],
   ],
   links: [['linkedin', 3, 3], ['email', 1, 1], ['job-site', 2, 2]],
-  media: { radioPlays: 5, radioSeconds: 1390, mineGames: 4, mineWins: 2, mineAvgWin: 148 },
+  hesitation: [
+    ['resume', 5, 14.2], ['start-button', 4, 9.8], ['contact-send', 3, 11.5],
+    ['linkedin', 2, 4.1], ['icon-secret', 2, 3.4],
+  ],
+  hesitationConv: { resume: 2, 'contact-send': 1, linkedin: 3, email: 1, 'start-button': 8 },
+  media: { radioPlays: 5, radioSeconds: 1390, mineGames: 4, mineWins: 2, mineAvgWin: 148, mineAvgClicks: 34, mineAvgFlags: 7 },
+  room: {
+    introAvg: 18, wideAvg: 22, deskAvg: 41, monitorAvg: 210, orbitAvg: 33,
+    afkAvg: 12, played: 5, summaries: 8, starts: 8, abandons: 3,
+  },
 };
 
 export const S_SYSTEM: SystemData = {
@@ -145,6 +154,8 @@ export const S_SYSTEM: SystemData = {
   heat: Array.from({ length: 30 }, () => [1 + Math.floor(Math.random() * 7), Math.floor(Math.random() * 24), 1 + Math.floor(Math.random() * 9)]),
   tz: 'Africa/Casablanca',
   vitals: { lcp: 1860, fcp: 940, cls: 0.021, inp: 130, samples: 26 },
+  perf: { fpsAvg: 58, fpsMin: 41, fpsSamples: 7, rage: 1, dead: 3, errors: 0, webglFails: 0 },
+  topErrors: [],
 };
 
 export const SAMPLE: Record<string, unknown> = {

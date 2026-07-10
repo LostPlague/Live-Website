@@ -246,7 +246,7 @@ export const handler = async (event) => {
     }
 
     else if (mode === 'content') {
-      const [apps, sections, links, media] = await Promise.all([
+      const [apps, sections, links, media, room, roomAll, hesitation, conv] = await Promise.all([
         hog(`SELECT properties.app a,
                countIf(event = 'app_opened') opens,
                uniqIf(person_id, event = 'app_opened') people,
@@ -266,20 +266,59 @@ export const handler = async (event) => {
                sumIf(coalesce(toFloat(properties.seconds), 0), event = 'radio_listened'),
                countIf(event = 'minesweeper_result'),
                countIf(event = 'minesweeper_result' AND properties.result = 'won'),
-               avgIf(toFloat(properties.seconds), event = 'minesweeper_result' AND properties.result = 'won')
+               avgIf(toFloat(properties.seconds), event = 'minesweeper_result' AND properties.result = 'won'),
+               avgIf(toFloat(properties.clicks), event = 'minesweeper_result' AND properties.clicks IS NOT NULL),
+               avgIf(toFloat(properties.flags), event = 'minesweeper_result' AND properties.flags IS NOT NULL)
+             FROM events ${WV} AND ${CUR}`),
+        // 3D room journey — averages over the per-visit room_summary events
+        hog(`SELECT avgIf(toFloat(properties.introSeconds), event = 'experience_started' AND properties.introSeconds IS NOT NULL),
+               avgIf(toFloat(properties.wideSeconds), event = 'room_summary'),
+               avgIf(toFloat(properties.deskSeconds), event = 'room_summary'),
+               avgIf(toFloat(properties.monitorSeconds), event = 'room_summary'),
+               avgIf(toFloat(properties.orbitSeconds), event = 'room_summary'),
+               avgIf(toFloat(properties.afkSeconds), event = 'room_summary'),
+               countIf(event = 'room_summary' AND properties.played = true),
+               countIf(event = 'room_summary')
+             FROM events ${WV} AND ${CUR}`),
+        // start-vs-abandon over ALL traffic (abandoners rarely pass the human
+        // gate by definition, so this one is measured against the whole book)
+        hog(`SELECT countIf(event = 'experience_started'), countIf(event = 'experience_abandoned')
+             FROM events WHERE ${BASE} AND ${CUR}
+               AND person_id NOT IN (SELECT person_id FROM events WHERE ${BASE} GROUP BY person_id HAVING ${OWNER})`),
+        // hesitation — meaningful hover targets, people + dwell
+        hog(`SELECT properties.target t, uniq(person_id) people, round(sum(toFloat(properties.seconds)), 1) sec
+             FROM events ${WV} AND ${CUR} AND event = 'element_hovered' AND t IS NOT NULL
+             GROUP BY t ORDER BY people DESC LIMIT 12`),
+        // conversion companions for the hesitation card
+        hog(`SELECT uniqIf(person_id, event = 'resume_downloaded'),
+               uniqIf(person_id, event = 'contact_submitted'),
+               uniqIf(person_id, event = 'link_clicked' AND properties.target = 'linkedin'),
+               uniqIf(person_id, event = 'link_clicked' AND properties.target = 'email'),
+               uniqIf(person_id, event = 'experience_started')
              FROM events ${WV} AND ${CUR}`),
       ]);
       data = {
-        apps, sections, links,
+        apps, sections, links, hesitation,
         media: {
           radioPlays: scalar(media, 0), radioSeconds: scalar(media, 1),
           mineGames: scalar(media, 2), mineWins: scalar(media, 3), mineAvgWin: scalar(media, 4),
+          mineAvgClicks: scalar(media, 5), mineAvgFlags: scalar(media, 6),
+        },
+        room: {
+          introAvg: scalar(room, 0), wideAvg: scalar(room, 1), deskAvg: scalar(room, 2),
+          monitorAvg: scalar(room, 3), orbitAvg: scalar(room, 4), afkAvg: scalar(room, 5),
+          played: scalar(room, 6), summaries: scalar(room, 7),
+          starts: scalar(roomAll, 0), abandons: scalar(roomAll, 1),
+        },
+        hesitationConv: {
+          resume: scalar(conv, 0), 'contact-send': scalar(conv, 1),
+          linkedin: scalar(conv, 2), email: scalar(conv, 3), 'start-button': scalar(conv, 4),
         },
       };
     }
 
     else if (mode === 'system') {
-      const [devices, browsers, oses, screens, vitals, heat] = await Promise.all([
+      const [devices, browsers, oses, screens, vitals, heat, perf, topErrors] = await Promise.all([
         hog(`SELECT properties.$device_type t, uniq(person_id) n FROM events ${WV} AND ${CUR} AND t != '' GROUP BY t ORDER BY n DESC LIMIT 5`),
         hog(`SELECT properties.$browser b, uniq(person_id) n FROM events ${WV} AND ${CUR} AND b != '' GROUP BY b ORDER BY n DESC LIMIT 6`),
         hog(`SELECT properties.$os o, uniq(person_id) n FROM events ${WV} AND ${CUR} AND o != '' GROUP BY o ORDER BY n DESC LIMIT 6`),
@@ -294,12 +333,25 @@ export const handler = async (event) => {
              FROM events ${WV} AND ${CUR}`),
         hog(`SELECT toDayOfWeek(timestamp, 0, '${tz}') d, toHour(toTimeZone(timestamp, '${tz}')) h, count()
              FROM events ${WV} AND ${CUR} GROUP BY d, h`),
+        // stability & behavior: 3D frame rate, frustration clicks, JS errors
+        hog(`SELECT round(avgIf(toFloat(properties.avg), event = 'fps_sample')),
+               round(avgIf(toFloat(properties.min), event = 'fps_sample' AND properties.min IS NOT NULL)),
+               countIf(event = 'fps_sample'),
+               countIf(event = '$rageclick'), countIf(event = '$dead_click'),
+               countIf(event = 'js_error'), countIf(event = 'webgl_failed')
+             FROM events ${WV} AND ${CUR}`),
+        hog(`SELECT properties.message m, count() n FROM events ${WV} AND ${CUR} AND event = 'js_error' AND m IS NOT NULL
+             GROUP BY m ORDER BY n DESC LIMIT 4`),
       ]);
       data = {
-        devices, browsers, oses, screens, heat, tz,
+        devices, browsers, oses, screens, heat, tz, topErrors,
         vitals: {
           lcp: scalar(vitals, 0), fcp: scalar(vitals, 1),
           cls: float3(vitals, 2), inp: scalar(vitals, 3), samples: scalar(vitals, 4),
+        },
+        perf: {
+          fpsAvg: scalar(perf, 0), fpsMin: scalar(perf, 1), fpsSamples: scalar(perf, 2),
+          rage: scalar(perf, 3), dead: scalar(perf, 4), errors: scalar(perf, 5), webglFails: scalar(perf, 6),
         },
       };
     }
