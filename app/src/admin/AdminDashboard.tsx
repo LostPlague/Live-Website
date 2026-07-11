@@ -130,6 +130,14 @@ const AdminDashboard: React.FC = () => {
     return () => window.clearInterval(id);
   }, [authed, page, days, loadPage]);
 
+  // Escape backs out of the dossier (keyboard parity with the back button)
+  useEffect(() => {
+    if (!dossier) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setDossier(null); setDetail(null); } };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [dossier]);
+
   const go = (p: PageId) => {
     setPage(p); setDossier(null); setDetail(null);
     if (!store[p]) void loadPage(p, days, { silent: true });

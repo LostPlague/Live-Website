@@ -90,6 +90,13 @@ export function useCountUp(target: number, ms = 800): number {
   const [v, setV] = useState(0);
   const from = useRef(0);
   useEffect(() => {
+    // reduced motion: numbers are state, not theater — render final value at once
+    try {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        setV(target); from.current = target;
+        return;
+      }
+    } catch { /* ignore */ }
     const start = performance.now();
     const a = from.current;
     let raf = 0;

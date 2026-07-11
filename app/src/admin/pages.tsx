@@ -16,10 +16,18 @@ const eventMeta = (r: Row): string => {
   const stage = r[3] ? String(r[3]) : '';
   const seconds = r[5] != null ? Number(r[5]) : null;
   if (ev === 'app_opened') return app;
-  if (ev === 'app_closed') return app + (seconds != null ? ` · ${secs(seconds)}` : '');
+  if (ev === 'app_closed') {
+    let m = app + (seconds != null ? ` · ${secs(seconds)}` : '');
+    if (r[10] != null) m += ` · ${secs(Number(r[10]))} focused`;
+    return m;
+  }
   if (ev === 'secret_stage_passed') return `Level ${STAGE_NO[stage] || '?'} · ${stage}` + (seconds != null ? ` · ${secs(seconds)}` : '');
   if (ev === 'secret_wrong_answer') return `Level ${STAGE_NO[stage] || '?'} · wrong answer` + (r[4] != null ? ` · ${r[4]} tries left` : '');
-  if (ev === 'section_viewed') return String(r[8] || '') + (seconds != null ? ` · read ${secs(seconds)}` : '');
+  if (ev === 'section_viewed') {
+    let m = String(r[8] || '') + (seconds != null ? ` · read ${secs(seconds)}` : '');
+    if (r[11] != null) m += ` · ${r[11]}% deep`;
+    return m;
+  }
   if (ev === 'link_clicked') return String(r[9] || '');
   if (ev === 'radio_listened') return seconds != null ? `listened ${secs(seconds)}` : '';
   if (ev === 'minesweeper_result') return seconds != null ? `${secs(seconds)}` : '';
@@ -229,7 +237,12 @@ export const VisitorsPage: React.FC<{
                 </tr></thead>
                 <tbody>
                   {rows.map((v) => (
-                    <tr className="cc-row" key={v.id} onClick={() => onOpen(v)}>
+                    <tr
+                      className="cc-row" key={v.id} tabIndex={0}
+                      aria-label={`Open dossier for ${v.num}`}
+                      onClick={() => onOpen(v)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(v); } }}
+                    >
                       <td className="cc-vid">{v.num}{v.returning && <span className="cc-ret" title={`${v.sessions} separate visits`}><Icon name="refresh" size={10} />{v.sessions}</span>}</td>
                       <td><span className="cc-score-cell"><span className="cc-score-bar"><span style={{ width: `${v.score}%` }} /></span>{v.score}</span></td>
                       <td><ClassChip k={v.class} /></td>

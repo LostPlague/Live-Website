@@ -206,7 +206,8 @@ export const handler = async (event) => {
             FROM events ${P}`),
         hog(`SELECT timestamp, event, properties.app, properties.stage, properties.attemptsLeft,
               properties.seconds, properties.$current_url, properties.$session_id,
-              properties.section, properties.target
+              properties.section, properties.target,
+              properties.focusedSeconds, properties.scrollPct
             FROM events ${P} AND event != '$identify'
             ORDER BY timestamp ASC LIMIT 600`),
       ]);
