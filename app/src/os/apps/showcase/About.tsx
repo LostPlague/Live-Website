@@ -17,13 +17,14 @@ const About: React.FC<AboutProps> = () => {
       <br />
       <div className="text-block">
         <p>
-          Senior software engineer and co-founder with <b>7 years</b> of
-          experience building reliable software systems across web, mobile,
-          embedded, and AI-driven environments. My background spans software
-          quality, automation, AI feature validation, workflow design, product
-          delivery, and client-facing application design, with a strong focus
-          on building systems that are scalable, usable, and aligned with real
-          business needs.
+          Senior QA Engineer with <b>8+ years</b> of experience delivering
+          manual, automated, mobile, embedded, and AI-feature quality assurance
+          for enterprise-scale products. Expertise spans Android/iOS device
+          testing, firmware and carrier validation, API and performance
+          testing, plus automation using Playwright, Selenium, Appium,
+          Python/pytest, and CI/CD. Led validation across 100+ physical devices
+          and 30+ Galaxy models while mentoring QA engineers and accelerating
+          defect resolution in high-release-cadence environments.
         </p>
         <br />
         <p>

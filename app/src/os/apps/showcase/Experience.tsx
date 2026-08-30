@@ -10,6 +10,8 @@ import { track } from '../../../analytics';
 //    2nd role — same company, two positions).
 //  - ALL body text is bullets (no lead-in paragraph), so per-job bullet spacing
 //    is uniform.
+// Content synced 2026-07-24 from "Mohamed Tabari - Senior QA Resume.docx"
+// (Med's updated Senior QA resume). Languages section deliberately excluded.
 
 interface Role {
   company?: string; // omitted → same company as the role above it
@@ -25,14 +27,15 @@ const experience: Role[] = [
     company: 'Profectra',
     websiteLabel: 'www.profectra.com',
     websiteHref: 'https://www.profectra.com',
-    role: 'Co-Founder',
-    dates: '02/2025 - 05/2026',
+    role: 'Co-Founder | QA Automation & AI Agent Testing',
+    dates: '02/2025 - 06/2026',
     bullets: [
-      'Co-founded Profectra, an agentic automation studio delivering bespoke multi-agent automation workflows tailored to client operations and business needs.',
-      'Worked directly with clients to identify workflow bottlenecks and translate business requirements into practical AI-native products and automation strategies.',
-      'Developed MCP-based integrations that enabled AI agents to access client systems, share real-time context, and execute across connected environments.',
-      'Designed client applications and interface experiences that translated business requirements into intuitive, modern, and agent-ready digital products.',
-      'Drove end-to-end delivery across product design, frontend experience, testing, and launch readiness, applying a strong QA and performance mindset to ship trustworthy agent-first experiences.',
+      'Co-founded Profectra, an agentic automation studio building multi-agent systems end to end, including architecture, implementation, QA, and deployment.',
+      'Shipped several production web and AI-agent applications end to end, owning test strategy, automated regression coverage, release validation, and production deployment.',
+      'Developed end-to-end UI regression coverage with Playwright, running cross-browser tests on Chromium, Firefox, and WebKit; containerized with Docker and integrated into GitHub Actions CI/CD.',
+      'Designed a multi-module Python/pytest automation engine with deterministic golden test cases to validate non-deterministic AI outputs and catch silent failure modes that standard functional testing often still misses.',
+      'Implemented automated REST API regression checks in Python and pytest, validating authentication, error handling, and response schemas on every commit through the CI pipeline.',
+      'Developed MCP-based integrations connecting AI agents across external tooling under a read-only permission model, following a full source-level dependency audit.',
     ],
   },
   {
@@ -40,11 +43,12 @@ const experience: Role[] = [
     role: 'Senior Software Quality Analyst',
     dates: '02/2020 - 01/2025',
     bullets: [
-      'Led testing of AI-powered object recognition and voice assistant features for Samsung devices, boosting accuracy and optimizing user experience across the Galaxy ecosystem.',
-      'Conducted performance and KPI testing, analyzing app responsiveness, frame rates, memory usage and overall system stability, accelerating issue resolution by 15%.',
-      'Directed cross-departmental collaboration to integrate software releases, train teams, and ensure smooth adoption, achieving 100% alignment across three value streams.',
-      'Mentored and managed five QA engineers, fostering a high-performing team environment that increased productivity by 20% through process optimization.',
-      'Tested and validated real-time AI features, ensuring low-latency inference and 99.9% uptime for live translation and voice assistant applications.',
+      'Led testing of AI-powered object recognition and voice assistant features across 30+ Galaxy models spanning phones, tablets, and wearables within a 100+ physical-device lab.',
+      'Filed and triaged 20+ defects per week (~1,000 annually) against near-daily firmware builds, using ADB and Android Studio logcat analysis to isolate root cause and accelerating issue resolution by 15%.',
+      'Owned regression coverage for foldable form factors, including dual-screen continuity and fold-state transitions, as well as ruggedized enterprise handsets; triggered suites through Jenkins CI pipelines.',
+      'Validated Verizon and AT&T carrier builds, verifying carrier-specific features, network provisioning, and OTA configuration.',
+      'Assessed live-translation and voice-assistant behavior across Arabic, French, and English, assessing translation accuracy, RTL rendering, latency, and reliability across supported Galaxy devices.',
+      'Mentored and managed five QA engineers and directed cross-departmental release integration across three value streams, increasing productivity by 20%.',
     ],
   },
   {
@@ -54,8 +58,8 @@ const experience: Role[] = [
     bullets: [
       'Developed and implemented test plans for manual and automated testing of network protocols, ensuring adherence to product quality standards and industry benchmarks.',
       'Executed comprehensive performance testing with JMeter, analyzing scalability and improving response times by 25% during peak network loads.',
-      'Automated regression testing with Selenium and Appium, boosting efficiency and increasing overall test coverage.',
-      'Partnered with cross-functional teams to troubleshoot embedded software issues and validate hardware components, optimizing testing workflows and reducing downtime.',
+      'Automated regression testing with Selenium and Appium, integrated into Jenkins CI pipelines, boosting efficiency and increasing overall test coverage.',
+      'Partnered with cross-functional teams to troubleshoot software issues using ADB and Android Studio logcat analysis, and validate hardware components, optimizing testing workflows and reducing downtime.',
     ],
   },
   {
@@ -66,7 +70,6 @@ const experience: Role[] = [
       'Created and updated technical documentation, test workflows, and processes, streamlining QA operations and improving team efficiency by 20%.',
       'Directed smoke, functional, and regression testing across QA, SIT, UAT, and PROD environments, ensuring compliance with healthcare IT standards.',
       'Partnered with R&D and clinical teams to implement IT standards and regulatory requirements, ensuring adherence to medical technology guidelines.',
-      'Collaborated with stakeholders to define and design performance test requirements, increasing test coverage and enhancing system reliability for healthcare applications.',
     ],
   },
   {
@@ -75,18 +78,18 @@ const experience: Role[] = [
     dates: '06/2018 - 11/2018',
     bullets: [
       'Designed and executed test cases for functional, ad-hoc, and exploratory testing, increasing test coverage and ensuring user-friendly marketing platforms.',
-      'Validated email marketing functionality across Android and iOS devices, ensuring compatibility and improving user engagement.',
-      'Executed RESTful API testing using SOAPUI and Postman, identifying and resolving critical integration issues to enhance system reliability.',
+      'Validated email marketing functionality across Android and iOS devices using ADB and Xcode simulators, ensuring compatibility and improving user engagement.',
+      'Executed RESTful API testing using SoapUI and Postman, identifying and resolving critical integration issues to enhance system reliability.',
     ],
   },
   {
     company: 'Meritek, Inc',
-    role: 'Data Analyst',
+    role: 'Analyst',
     dates: '01/2018 - 04/2018',
     bullets: [
-      'Validated database integrity through SQL-driven back-end testing, ensuring accuracy and consistency across web-based applications.',
-      'Conducted API testing with SOAP UI for Java-based portals, resolving critical middleware issues and enhancing application performance.',
-      'Collaborated with development teams to resolve cross-browser compatibility issues, enhancing user experience and platform reliability.',
+      'Validated database integrity through SQL-driven back-end testing across multiple web-based applications, ensuring data accuracy and consistency between the front end and the underlying tables.',
+      'Conducted API testing with SoapUI against Java-based portals, identifying and resolving critical middleware integration issues that were degrading application performance and response times.',
+      'Collaborated with development teams to reproduce and resolve cross-browser compatibility issues affecting end users, improving overall user experience and platform reliability across supported browsers.',
     ],
   },
 ];
