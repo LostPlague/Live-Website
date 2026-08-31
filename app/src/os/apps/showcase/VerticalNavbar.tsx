@@ -28,13 +28,15 @@ const VerticalNavbar: React.FC<VerticalNavbarProps> = () => {
   }, [location.pathname]);
 
   return !isHome ? (
-    <div style={styles.navbar}>
-      <div style={styles.header}>
+    // classNames exist so the mobile rules in os.css can override these inline
+    // styles (inline wins over CSS, so those rules use !important).
+    <div className="site-navbar" style={styles.navbar}>
+      <div className="site-navbar-header" style={styles.header}>
         <h1 style={styles.headerText}>Mohamed</h1>
         <h1 style={styles.headerText}>Tabari</h1>
         <h3 style={styles.headerShowcase}>Showcase '25</h3>
       </div>
-      <div style={styles.links}>
+      <div className="site-navbar-links" style={styles.links}>
         <Link containerStyle={styles.link} to="" text="HOME" />
         <Link containerStyle={styles.link} to="about" text="ABOUT" />
         <Link containerStyle={styles.link} to="experience" text="EXPERIENCE" />

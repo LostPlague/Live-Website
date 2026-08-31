@@ -13,6 +13,9 @@
 //     `/?me=<OWNER_TOKEN>`. That browser then stamps `is_owner` on every event
 //     and identifies as the single stable "owner" person, so his own visits
 //     never pollute visitor stats. `/?me=off` untags.
+//     The tag is resolved BEFORE PostHog is touched and stored in BOTH
+//     localStorage and a 1-year first-party cookie — see `resolveOwner()` for
+//     why both, and why the ordering is load-bearing rather than stylistic.
 //
 // Measurement philosophy (Phase 2): everything meaningful is measured, but
 // summarized — thresholds instead of firehoses. Hovers only count past 600ms,
@@ -28,34 +31,120 @@ import posthog from 'posthog-js';
 const KEY = 'phc_xctjb4xR6BCSwnSRKKD4EbGkQqymHFDzkZRd5DzyME3E';
 const HOST = 'https://us.i.posthog.com';
 const OWNER_TOKEN = 'k9Xm2Q7p';
+const OWNER_KEY = 'cc_owner';
+const OWNER_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 
 let started = false;
 
-/** Tag/untag this browser as the owner via ?me=<token> / ?me=off, then strip
- *  the param from the address bar. Runs in both documents (shared storage). */
-function applyOwner(): void {
+// The tag is mirrored into a first-party cookie as well as localStorage. Either
+// one alone is fragile: "Clear site data" wipes localStorage, and some privacy
+// settings expire script-written storage on a short clock. Reads accept either
+// store; writes always set both, so a purge of one survives in the other.
+function readCookie(name: string): string | null {
+  const m = document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'));
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+function writeCookie(name: string, value: string, maxAge: number): void {
+  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `${name}=${value}; path=/; max-age=${maxAge}; SameSite=Lax${secure}`;
+}
+
+/** Visible confirmation that the tag took. Without this, a failed tag is
+ *  indistinguishable from a successful one and you find out weeks later, in the
+ *  dashboard, as "Visitor 014". Plain DOM — it must work before React mounts
+ *  and on /admin, where React owns a different tree entirely. */
+function ownerToast(on: boolean): void {
+  try {
+    const paint = () => {
+      const el = document.createElement('div');
+      el.setAttribute('role', 'status');
+      el.textContent = on
+        ? '●  Owner mode ON — your visits are excluded from stats'
+        : '○  Owner mode OFF — you are counted as a normal visitor';
+      el.style.cssText = [
+        'position:fixed', 'top:18px', 'left:50%', 'transform:translateX(-50%)',
+        'z-index:2147483647', 'padding:10px 18px', 'border-radius:999px',
+        'font:600 13px/1 ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif',
+        'letter-spacing:0.01em', 'white-space:nowrap',
+        `color:${on ? '#eaf2ff' : '#8ba3c7'}`,
+        'background:rgba(11,22,38,0.92)',
+        `border:1px solid ${on ? 'rgba(56,189,248,0.45)' : 'rgba(56,189,248,0.18)'}`,
+        'box-shadow:0 8px 24px rgba(0,0,0,0.35)',
+        'opacity:0', 'transition:opacity 200ms cubic-bezier(0.23,1,0.32,1)',
+        'pointer-events:none',
+      ].join(';');
+      document.body.appendChild(el);
+      requestAnimationFrame(() => { el.style.opacity = '1'; });
+      window.setTimeout(() => {
+        el.style.opacity = '0';
+        window.setTimeout(() => el.remove(), 250);
+      }, 4000);
+    };
+    if (document.body) paint();
+    else window.addEventListener('DOMContentLoaded', paint, { once: true });
+  } catch {
+    /* a missing toast must never cost us the tag */
+  }
+}
+
+/**
+ * Resolve and PERSIST the owner preference. Deliberately free of any PostHog
+ * call, and called before `posthog.init` — this used to live after it, inside
+ * the same try block, which meant a blocked or failed posthog-js swallowed the
+ * write and the tag never persisted at all. On the owner's own machine (where
+ * ad-blockers are most likely) that failure mode was permanent and silent.
+ *
+ * Safe to call on /admin, where analytics never initializes, so `/admin?me=…`
+ * tags the browser without turning tracking on for the dashboard.
+ *
+ * @returns whether this browser is currently tagged as the owner.
+ */
+export function resolveOwner(): boolean {
   try {
     const params = new URLSearchParams(window.location.search);
     const me = params.get('me');
-    if (me === OWNER_TOKEN) localStorage.setItem('cc_owner', '1');
-    else if (me === 'off') localStorage.removeItem('cc_owner');
+
+    if (me === OWNER_TOKEN) {
+      localStorage.setItem(OWNER_KEY, '1');
+      writeCookie(OWNER_KEY, '1', OWNER_MAX_AGE);
+    } else if (me === 'off') {
+      localStorage.removeItem(OWNER_KEY);
+      writeCookie(OWNER_KEY, '', 0);
+    }
+
+    // Strip ?me= so the token never sits in the address bar, gets bookmarked,
+    // or rides along in a shared link.
     if (me !== null) {
       params.delete('me');
       const q = params.toString();
       window.history.replaceState({}, '', window.location.pathname + (q ? '?' + q : ''));
     }
-    if (localStorage.getItem('cc_owner') === '1') {
-      posthog.register({ is_owner: true }); // stamped on every event from here on
-      posthog.identify('owner');            // one person across all owner devices
+
+    const tagged = localStorage.getItem(OWNER_KEY) === '1' || readCookie(OWNER_KEY) === '1';
+
+    // Heal a half-present tag: whichever store survived re-seeds the other.
+    if (tagged) {
+      try { localStorage.setItem(OWNER_KEY, '1'); } catch { /* storage may be full/blocked */ }
+      writeCookie(OWNER_KEY, '1', OWNER_MAX_AGE);
     }
+
+    if (me !== null) ownerToast(tagged);
+    // Always answerable from devtools, on any page, without touching the dashboard.
+    console.info(`[analytics] owner mode: ${tagged ? 'ON' : 'off'}`);
+    return tagged;
   } catch {
-    /* ignore */
+    return false;
   }
 }
 
 export function initAnalytics(): void {
   if (started || typeof window === 'undefined') return;
   started = true;
+
+  // Resolved FIRST, and outside the try below: persisting the owner tag must
+  // never depend on PostHog loading successfully.
+  const isOwner = resolveOwner();
 
   const inIframe = !!window.parent && window.parent !== window;
 
@@ -77,6 +166,15 @@ export function initAnalytics(): void {
     // this, and the iframe reads the room's instance to unify visitors.
     (window as unknown as { posthog?: unknown }).posthog = posthog;
 
+    // Untag must actually untag. PostHog keeps super properties and the
+    // identity in its OWN storage bucket, which clearing `cc_owner` does not
+    // touch — so without this, `?me=off` left the browser stamping
+    // `is_owner: true` and identifying as "owner" forever. Runs before any
+    // register() below, since reset() wipes super properties.
+    const staleOwner =
+      posthog.get_distinct_id?.() === 'owner' || posthog.get_property?.('is_owner') === true;
+    if (!isOwner && staleOwner) posthog.reset(); // fresh anonymous id, flag dropped
+
     posthog.register({ surface: inIframe ? 'os' : 'room' });
     if (inIframe) {
       const parentPH = (window.parent as unknown as { posthog?: { get_distinct_id?: () => string } }).posthog;
@@ -84,7 +182,11 @@ export function initAnalytics(): void {
       if (pid) posthog.identify(pid);
     }
 
-    applyOwner(); // after identify-adoption so the owner identity wins
+    // After identify-adoption so the owner identity wins over the parent's.
+    if (isOwner) {
+      posthog.register({ is_owner: true }); // stamped on every event from here on
+      posthog.identify('owner');            // one person across all owner devices
+    }
 
     // JS errors — the site should never fail silently in production. Capped at
     // 5 per page so a render-loop error can't flood the event stream.

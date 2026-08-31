@@ -43,10 +43,23 @@ export const Window: React.FC<WindowProps> = ({
   title, icon, iconSrc, bottomLeftText, children, onClose, onMinimize,
   initialTop, initialLeft, initialWidth, initialHeight
 }) => {
-  const defaultWidth = initialWidth ?? 520;   // Henry's resize floor is 520×220
-  const defaultHeight = initialHeight ?? 420;
-  const defaultLeft = initialLeft ?? Math.round(window.innerWidth / 2 - defaultWidth / 2);
-  const defaultTop = initialTop ?? Math.round(window.innerHeight / 2 - defaultHeight / 2 - 16);
+  // Phones: every app used to open off-screen or wider than the display —
+  // Radio at left:420, Secret Files 620 wide, Minesweeper 520 — on a 375px
+  // screen. Below 768px each window fills the display instead, leaving room
+  // for the taskbar. Desktop keeps Henry's exact geometry.
+  const isSmall = typeof window !== 'undefined' && window.innerWidth < 768;
+  const defaultWidth = isSmall
+    ? Math.max(240, window.innerWidth - 8)
+    : (initialWidth ?? 520);   // Henry's resize floor is 520×220
+  const defaultHeight = isSmall
+    ? Math.max(240, window.innerHeight - 44)   // 32px toolbar + margins
+    : (initialHeight ?? 420);
+  const defaultLeft = isSmall
+    ? 4
+    : (initialLeft ?? Math.round(window.innerWidth / 2 - defaultWidth / 2));
+  const defaultTop = isSmall
+    ? 4
+    : (initialTop ?? Math.round(window.innerHeight / 2 - defaultHeight / 2 - 16));
 
   const [top, setTop] = useState(defaultTop);
   const [left, setLeft] = useState(defaultLeft);
