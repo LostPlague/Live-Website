@@ -55,6 +55,7 @@ const OWNER = `(countIf(properties.is_owner = true) > 0 OR countIf(distinct_id =
 
 // Person set used to scope every stat to engaged, non-owner humans.
 const HUMAN_IDS = `SELECT person_id FROM events WHERE ${BASE} GROUP BY person_id HAVING ${HUMAN} AND NOT ${OWNER}`;
+const OWNER_IDS = `SELECT person_id FROM events WHERE ${BASE} GROUP BY person_id HAVING ${OWNER}`;
 
 async function hog(query) {
   const res = await fetch(`${PH_HOST}/api/projects/${PROJECT}/query/`, {
@@ -210,9 +211,36 @@ export const handler = async (event) => {
   // range-windowed stats additionally clip to the selected period.
   const CUR = `timestamp > now() - INTERVAL ${days} DAY`;
   const PREV = `timestamp <= now() - INTERVAL ${days} DAY AND timestamp > now() - INTERVAL ${days * 2} DAY`;
-  const WV = `WHERE ${BASE} AND person_id IN (${HUMAN_IDS})`;
 
   try {
+    // Resolve the person sets ONCE per request.
+    //
+    // These two used to be inlined as subqueries — HUMAN_IDS inside WV, which
+    // 23 separate queries reference. A single Overview load therefore made
+    // PostHog run the same full GROUP-BY-over-all-events, with a dozen
+    // conditional aggregates and JSON property extractions, seven times over in
+    // parallel. That is what hit PostHog's max execution time and returned a
+    // 504 (surfacing here as "Server error 502") — it locked the dashboard at
+    // the login screen, since the gate itself has to load Overview.
+    //
+    // Resolved up front, every downstream query filters on a literal list of a
+    // handful of UUIDs instead of re-deriving the set from scratch.
+    const [humanRows, ownerRows] = await Promise.all([
+      sharedQuery('humanIds', HUMAN_IDS),
+      sharedQuery('ownerIds', OWNER_IDS),
+    ]);
+    // Validate before inlining. These come from our own project, but an id is
+    // going straight into SQL text, so it gets checked rather than trusted.
+    const idsOf = (rows) => rows
+      .map((r) => String(r[0]))
+      .filter((id) => /^[0-9a-fA-F-]{36}$/.test(id));
+    // `IN ()` is a syntax error; the sentinel keeps the SQL valid and matches
+    // nobody, which is the correct meaning of an empty set.
+    const inList = (ids) => (ids.length ? ids.map((id) => `'${id}'`).join(',') : `''`);
+    const humanIn = inList(idsOf(humanRows));
+    const ownerIn = inList(idsOf(ownerRows));
+    const WV = `WHERE ${BASE} AND person_id IN (${humanIn})`;
+
     let data;
 
     if (mode === 'visitor') {
@@ -321,7 +349,7 @@ export const handler = async (event) => {
         // gate by definition, so this one is measured against the whole book)
         hog(`SELECT countIf(event = 'experience_started'), countIf(event = 'experience_abandoned')
              FROM events WHERE ${BASE} AND ${CUR}
-               AND person_id NOT IN (SELECT person_id FROM events WHERE ${BASE} GROUP BY person_id HAVING ${OWNER})`),
+               AND person_id NOT IN (${ownerIn})`),
         // hesitation — meaningful hover targets, people + dwell
         hog(`SELECT properties.target t, uniq(person_id) people, round(sum(toFloat(properties.seconds)), 1) sec
              FROM events ${WV} AND ${CUR} AND event = 'element_hovered' AND t IS NOT NULL
