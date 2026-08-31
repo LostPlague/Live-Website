@@ -162,6 +162,27 @@ function shapeRoster(rows) {
 const cache = new Map();
 const TTL_MS = 25_000;
 
+// The roster and the all-time person count are the two heaviest queries here,
+// they both ignore the selected range, and BOTH the Overview and Visitors pages
+// need them. Because the cache above is keyed by `mode`, each page was paying
+// for them separately — which is how Visitors could exceed the function timeout
+// and hand back a platform 502 while Overview succeeded. So they get their own
+// memo, held longer (all-time aggregates move slowly), and it stores the
+// PROMISE rather than the result so two pages in flight collapse onto a single
+// query instead of racing each other.
+const ALL_PERSONS_SQL = `SELECT count(DISTINCT person_id) FROM events WHERE ${BASE}`;
+const SHARED_TTL_MS = 60_000;
+const sharedCache = new Map();
+
+function sharedQuery(key, sql) {
+  const hit = sharedCache.get(key);
+  if (hit && Date.now() - hit.t < SHARED_TTL_MS) return hit.p;
+  // Never cache a rejection — one blip would otherwise poison the next minute.
+  const p = hog(sql).catch((e) => { sharedCache.delete(key); throw e; });
+  sharedCache.set(key, { t: Date.now(), p });
+  return p;
+}
+
 export const handler = async (event) => {
   if (event.httpMethod !== 'POST') return j({ error: 'method not allowed' }, 405);
   if (!process.env.POSTHOG_PERSONAL_KEY || !process.env.ADMIN_PASSWORD) {
@@ -216,8 +237,8 @@ export const handler = async (event) => {
 
     else if (mode === 'visitors') {
       const [roster, allPersons, bots] = await Promise.all([
-        hog(ROSTER_SQL),
-        hog(`SELECT count(DISTINCT person_id) FROM events WHERE ${BASE}`),
+        sharedQuery('roster', ROSTER_SQL),
+        sharedQuery('allPersons', ALL_PERSONS_SQL),
         showBots
           ? hog(`SELECT person_id, min(timestamp) f, max(timestamp) l, count() ev,
                    any(properties.$geoip_country_name), any(properties.$geoip_city_name),
@@ -386,20 +407,36 @@ export const handler = async (event) => {
              FROM events ${WV} AND ${CUR}
                AND event IN ('secret_opened','secret_stage_passed','secret_wrong_answer','secret_completed')
              GROUP BY event, st`),
-        hog(`SELECT properties.$referring_domain r, uniq(person_id) n
-             FROM events ${WV} AND ${CUR} AND r != '' AND r != '$direct' AND r NOT LIKE '%mohamedtabari.com%'
-             GROUP BY r ORDER BY n DESC LIMIT 6`),
+        // Direct is a traffic source, not the absence of one — and for someone
+        // sending this URL out on a CV it is usually the BIGGEST one. It used to
+        // be filtered out entirely, so the channel that matters most was the one
+        // channel the card could never show. Same-site referrers stay excluded:
+        // those are internal navigations, not arrivals.
+        hog(`SELECT if(coalesce(properties.$referring_domain, '$direct') IN ('$direct', ''),
+                       'Direct', properties.$referring_domain) r,
+               uniq(person_id) n
+             FROM events ${WV} AND ${CUR}
+               AND coalesce(properties.$referring_domain, '$direct') NOT LIKE '%mohamedtabari.com%'
+             GROUP BY r ORDER BY n DESC LIMIT 7`),
         hog(`SELECT timestamp, event, properties.app, properties.$geoip_country_name, person_id,
                properties.stage, properties.section, properties.target
              FROM events ${WV} AND event NOT LIKE '$%' ORDER BY timestamp DESC LIMIT 30`),
+        // LIVE — the one card that must not use the full engagement gate. That
+        // gate is retrospective: a genuine visitor 20 seconds into their first
+        // session hasn't clicked Start or opened a 2nd app yet, and requiring it
+        // would hide exactly the person this card exists to show. What we DO
+        // exclude is the headless-renderer fingerprint, which is positive proof
+        // of a bot at any age — previously this query had no bot filter at all,
+        // so Google's indexer surfaced here as a live human.
         hog(`SELECT person_id, any(properties.$geoip_city_name), any(properties.$geoip_country_name),
                max(timestamp), count()
              FROM events WHERE ${BASE} AND timestamp > now() - INTERVAL 5 MINUTE
              GROUP BY person_id
              HAVING countIf(properties.is_owner = true) = 0 AND countIf(distinct_id = 'owner') = 0
+               AND NOT ${BOTLIKE}
              ORDER BY max(timestamp) DESC LIMIT 12`),
-        hog(ROSTER_SQL),
-        hog(`SELECT count(DISTINCT person_id) FROM events WHERE ${BASE}`),
+        sharedQuery('roster', ROSTER_SQL),
+        sharedQuery('allPersons', ALL_PERSONS_SQL),
       ]);
       const { visitors, owner } = shapeRoster(roster);
       data = {

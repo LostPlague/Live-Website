@@ -115,6 +115,10 @@
   transition: color var(--t-fast) ease, background-color var(--t-fast) ease;
 }
 .cc-range button.on { background: linear-gradient(120deg, var(--blue), #22d3ee); color: #06101f; }
+/* Views whose data is all-time (roster, dossier) disable the range rather than
+   pretending it applies. Every control ships a disabled state. */
+.cc-range button:disabled { opacity: 0.4; cursor: not-allowed; }
+.cc-range button:disabled.on { opacity: 0.55; }
 .cc-btn-ghost {
   display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.04);
   border: 1px solid var(--line); border-radius: 9px; color: var(--muted);

@@ -4,7 +4,7 @@ import type {
 } from './ui';
 import {
   Icon, Card, Empty, Kpi, Trend, HBars, Donut, Heatmap, WorldMap, ScoreRing, SecretFunnel, ClassChip,
-  EV_ICON, TROPHY_EV, STAGE_NO, secs, fmtTime, fmtDay, ago,
+  EV_ICON, TROPHY_EV, STAGE_NO, secs, fmtTime, fmtDay, ago, parseTs,
 } from './ui';
 
 // ── shared bits ──────────────────────────────────────────────────────────────
@@ -120,7 +120,7 @@ export const OverviewPage: React.FC<{ d: OverviewData; onOpenVisitor: (v: Visito
         </Card>
 
         <Card span={4} title="Traffic sources">
-          <HBars rows={d.referrers} emptyText="All direct so far — no referrers yet." />
+          <HBars rows={d.referrers} emptyText="No arrivals in this range yet." />
         </Card>
 
         <Card span={8} title="Latest activity" right={<span className="cc-count">exact times · your clock</span>}>
@@ -324,7 +324,10 @@ export const DossierView: React.FC<{ visitor: Visitor; detail: VisitorDetail | n
       return Object.entries(t).sort((a, b) => b[1] - a[1]).map(([a, s]) => [a, s] as Row);
     }, [detail]);
 
-    const durOf = (s: { start: string; end: string }) => Math.round((+new Date(s.end) - +new Date(s.start)) / 1000);
+    // parseTs, not new Date: the offset cancels out for a same-day session, but
+    // a session spanning a DST change would parse its two ends at different
+    // offsets and report an hour of phantom duration.
+    const durOf = (s: { start: string; end: string }) => Math.round((+parseTs(s.end) - +parseTs(s.start)) / 1000);
 
     return (
       <>

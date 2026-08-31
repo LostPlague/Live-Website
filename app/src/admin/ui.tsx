@@ -72,14 +72,25 @@ export const secs = (s: number) => {
   if (s >= 60) return `${Math.floor(s / 60)}m ${s % 60}s`;
   return `${s}s`;
 };
+/** ClickHouse can hand back a timestamp with no zone marker ("2026-08-31
+ *  14:46:43"). JS parses those as LOCAL time, silently shifting every timestamp
+ *  by the viewer's UTC offset — an hour of drift in Casablanca, enough to make
+ *  someone who is on the site RIGHT NOW read as "1h ago" on the live card.
+ *  PostHog timestamps are always UTC, so assume UTC when no zone is present;
+ *  an already-zoned string is passed through untouched. The sample fixtures use
+ *  toISOString(), which is why this never showed up in dev. */
+export const parseTs = (ts: string): Date => {
+  const s = String(ts).trim();
+  return new Date(/(?:Z|[+-]\d{2}:?\d{2})$/.test(s) ? s : s.replace(' ', 'T') + 'Z');
+};
 export const fmtTime = (iso: string) =>
-  new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  parseTs(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 export const fmtDay = (iso: string) =>
-  new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  parseTs(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 export const fmtClock = (iso: string) =>
-  new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  parseTs(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 export const ago = (iso: string) => {
-  const s = Math.max(0, Math.round((Date.now() - +new Date(iso)) / 1000));
+  const s = Math.max(0, Math.round((Date.now() - +parseTs(iso)) / 1000));
   if (s < 60) return `${s}s ago`;
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;

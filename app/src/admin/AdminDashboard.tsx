@@ -22,6 +22,11 @@ const NAV: { id: PageId; label: string; icon: string }[] = [
   { id: 'system', label: 'System', icon: 'cpu' },
 ];
 const RANGES = [{ d: 1, label: '24H' }, { d: 7, label: '7D' }, { d: 30, label: '30D' }, { d: 90, label: '90D' }];
+// The roster and the dossier are all-time by design: the roster is ordered by
+// first-seen so visitor numbering stays permanent, and a dossier shows a
+// person's whole history. Leaving the range pills live on those views made a
+// working control look broken — clicking them did nothing at all.
+const RANGE_NA = 'Not applicable here — the roster and dossiers are all-time, so visitor numbers stay permanent.';
 const TZ = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; } })();
 
 interface Store {
@@ -59,6 +64,9 @@ const AdminDashboard: React.FC = () => {
   const [sample, setSample] = useState(false);
   const [updated, setUpdated] = useState<Date | null>(null);
   const [showBots, setShowBots] = useState(false);
+  // Per-page failure. Without it a failed fetch left the panel on "Loading…"
+  // indefinitely, which reads as a hang rather than an error you can retry.
+  const [failed, setFailed] = useState<Partial<Record<PageId, string>>>({});
   const [dossier, setDossier] = useState<Visitor | null>(null);
   const [detail, setDetail] = useState<VisitorDetail | null>(null);
   const pwRef = useRef(pw);
@@ -91,6 +99,7 @@ const AdminDashboard: React.FC = () => {
     try {
       const data = await api({ mode: p, days: d, showBots: p === 'visitors' ? (opts.bots ?? showBots) : undefined });
       setStore((s) => ({ ...s, [p]: data }));
+      clearFailed(p);
       setAuthed(true); setError(''); setSample(false); setUpdated(new Date());
       sessionStorage.setItem('cc_pw', pwRef.current);
       return true;
@@ -98,17 +107,24 @@ const AdminDashboard: React.FC = () => {
       const err = e as { kind?: string; message?: string };
       if (err.kind === 'auth') {
         setError('Wrong access key.'); setAuthed(false); sessionStorage.removeItem('cc_pw');
-      } else if (err.kind === 'server') {
-        if (import.meta.env.DEV) { devFallback(p); return true; }
-        setError(err.message || 'Server error.');
       } else {
         if (import.meta.env.DEV) { devFallback(p); return true; }
-        setError('Could not reach the server. Confirm you are on mohamedtabari.com/admin and hard-refresh (Ctrl+Shift+R).');
+        const msg = err.kind === 'server'
+          ? (err.message || 'Server error.')
+          : 'Could not reach the server. Confirm you are on mohamedtabari.com/admin and hard-refresh (Ctrl+Shift+R).';
+        setError(msg);
+        // Record it against the page so the panel can offer a retry instead of
+        // spinning forever. Pages that already hold data keep showing it.
+        setFailed((f) => ({ ...f, [p]: msg }));
       }
       return false;
     } finally { setBusy(false); }
+    function clearFailed(pp: PageId) {
+      setFailed((f) => { if (!(pp in f)) return f; const n = { ...f }; delete n[pp]; return n; });
+    }
     function devFallback(pp: PageId) {
       setStore((s) => ({ ...s, [pp]: SAMPLE[pp] }));
+      clearFailed(pp);
       setAuthed(true); setSample(true); setError(''); setUpdated(new Date());
     }
   }, [api, showBots]);
@@ -164,6 +180,7 @@ const AdminDashboard: React.FC = () => {
   if (!authed) return <div className="cc-root"><Gate onSubmit={auth} error={error} busy={busy} /></div>;
 
   const roster = store.visitors?.visitors ?? store.overview?.visitors ?? [];
+  const rangeApplies = !dossier && page !== 'visitors';
 
   return (
     <div className="cc-root">
@@ -196,9 +213,11 @@ const AdminDashboard: React.FC = () => {
           <h1 className="cc-page-title">{dossier ? dossier.num : NAV.find((n) => n.id === page)?.label}</h1>
           <div className="cc-topbar-right">
             {error && <span className="cc-error-chip" title={error}>{error.slice(0, 60)}</span>}
-            <div className="cc-range">
+            <div className="cc-range" title={rangeApplies ? undefined : RANGE_NA}>
               {RANGES.map((r) => (
-                <button key={r.d} className={days === r.d ? 'on' : ''} onClick={() => changeDays(r.d)}>{r.label}</button>
+                <button key={r.d} className={days === r.d ? 'on' : ''}
+                  disabled={!rangeApplies} title={rangeApplies ? undefined : RANGE_NA}
+                  onClick={() => changeDays(r.d)}>{r.label}</button>
               ))}
             </div>
             <button className="cc-btn-ghost" title="Refresh now" onClick={() => void loadPage(page, days, { silent: true })}>
@@ -220,6 +239,16 @@ const AdminDashboard: React.FC = () => {
             <ContentPage d={store.content} />
           ) : page === 'system' && store.system ? (
             <SystemPage d={store.system} />
+          ) : failed[page] ? (
+            <div className="cc-empty">
+              <Icon name="x" size={22} />
+              <p>Couldn’t load {page}.</p>
+              <p className="cc-empty-sub">{failed[page]}</p>
+              <button className="cc-btn-ghost" style={{ marginTop: 4 }} disabled={busy}
+                onClick={() => void loadPage(page, days)}>
+                <Icon name="refresh" size={13} />{busy ? 'Retrying…' : 'Try again'}
+              </button>
+            </div>
           ) : (
             <div className="cc-loading"><span className="cc-spinner" />Loading {page}…</div>
           )}

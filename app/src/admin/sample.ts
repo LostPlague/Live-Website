@@ -76,7 +76,9 @@ export const S_OVERVIEW: OverviewData = {
     matrix: 1, matrixPrev: 0, contacts: 1, contactsPrev: 1, links: 4, linksPrev: 2, returning: 2,
   },
   trend: TREND, funnel: FUNNEL,
-  referrers: [['linkedin.com', 4], ['google.com', 2], ['github.com', 1]],
+  // 'Direct' is a real row now (people typing the URL off a CV), so the fixture
+  // mirrors that — usually the largest source, hence first.
+  referrers: [['Direct', 9], ['linkedin.com', 4], ['google.com', 2], ['github.com', 1]],
   recent: RECENT, live: LIVE, visitors: VISITORS, owner: OWNER, botCount: 23,
 };
 
