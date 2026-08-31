@@ -116,7 +116,11 @@ const Experience: React.FC<ExperienceProps> = () => {
                 </div>
               )}
               <div style={styles.headerRow}>
-                <h3>{job.role}</h3>
+                {/* Long titles (e.g. "Co-Founder | QA Automation & AI Agent
+                    Testing") wrapped to two lines at the 24px h3 size while
+                    every other role sat on one. Keep the full text, scale it to
+                    fit on a single line instead. */}
+                <h3 style={job.role.length > 32 ? styles.roleLong : undefined}>{job.role}</h3>
                 <b>
                   <p>{job.dates}</p>
                 </b>
@@ -152,6 +156,15 @@ const styles: StyleSheetCSS = {
   headerRow: {
     justifyContent: 'space-between',
     alignItems: 'flex-end',
+  },
+  // scales with the window so the title stays on ONE line as the OS window
+  // resizes; ellipsis is the last-resort guard on very narrow windows.
+  roleLong: {
+    fontSize: 'clamp(14px, 1.6vw, 20px)',
+    whiteSpace: 'nowrap',
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
 };
 

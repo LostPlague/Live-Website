@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import './Window.css';
 import minimizeIcon from '../assets/minimize.png';
 import maximizeIcon from '../assets/maximize.png';
@@ -64,13 +64,25 @@ export const Window: React.FC<WindowProps> = ({
       setIsMaximized(false);
     } else {
       setPreMaxSize({ top, left, width, height });
+      setIsMaximized(true);   // the effect below sizes it to the viewport
+    }
+  };
+
+  // A maximized window must TRACK the viewport, not freeze at its size when the
+  // button was clicked. Without this, resizing the browser (or the CRT iframe
+  // changing size) left the window overflowing off-screen or short of the edge.
+  useEffect(() => {
+    if (!isMaximized) return;
+    const fit = () => {
       setTop(0);
       setLeft(0);
       setWidth(window.innerWidth);
       setHeight(window.innerHeight - 32);   // Henry: winH - 32 (toolbar)
-      setIsMaximized(true);
-    }
-  };
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [isMaximized]);
 
   return (
     <div

@@ -137,14 +137,23 @@
   background-color: #FFFFFF;
 }
 
-.os-window-content[data-maximized="true"] {
+/* Maximized windows: content simply REFLOWS into the bigger frame.
+   This used to scale every maximized window's child by 2.5x, which was only
+   ever meant for the tiny fixed-size Minesweeper board — it blew the showcase,
+   browser, radio and secret-files layouts to 2.5x their frame (the showcase
+   page measured 3133x1750 inside a 1268x700 window and shifted off-screen).
+   Only fixed-size pixel-art apps opt in, via the selectors below. */
+.os-window-content[data-maximized="true"]:has(> .ms-window) {
   display: flex;
   justify-content: center;
   align-items: center;
 }
 
-.os-window-content[data-maximized="true"] > * {
-  transform: scale(2.5);
+/* Minesweeper's board is a fixed 172x232; scale it up so it doesn't float
+   tiny in a maximized window. 2.2 keeps it inside short windows too
+   (232 * 2.2 = 510px tall). */
+.os-window-content[data-maximized="true"] > .ms-window {
+  transform: scale(2.2);
   transform-origin: center center;
   image-rendering: pixelated;  /* keep pixel-art crisp when scaling */
 }
