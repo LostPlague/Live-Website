@@ -16,6 +16,7 @@ export interface Visitor {
   country: string | null; city: string | null; device: string | null; browser: string | null;
   lat: number | null; lon: number | null;
   returning: boolean; score: number; class: 'hot' | 'explorer' | 'passerby';
+  ref: string | null; // which application link brought them, if any
 }
 export interface OwnerInfo {
   num: string; first: string; last: string; events: number; sessions: number;

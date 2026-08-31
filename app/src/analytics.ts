@@ -33,6 +33,8 @@ const HOST = 'https://us.i.posthog.com';
 const OWNER_TOKEN = 'k9Xm2Q7p';
 const OWNER_KEY = 'cc_owner';
 const OWNER_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
+const REF_KEY = 'cc_ref';
+const REF_MAX_AGE = 60 * 60 * 24 * 180; // 180 days — longer than a hiring cycle
 
 let started = false;
 
@@ -47,7 +49,9 @@ function readCookie(name: string): string | null {
 
 function writeCookie(name: string, value: string, maxAge: number): void {
   const secure = window.location.protocol === 'https:' ? '; Secure' : '';
-  document.cookie = `${name}=${value}; path=/; max-age=${maxAge}; SameSite=Lax${secure}`;
+  // Encoded to pair with the decode on read — the owner flag is just "1", but
+  // the ref is a free-form slug and must survive the round trip intact.
+  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=Lax${secure}`;
 }
 
 /** Visible confirmation that the tag took. Without this, a failed tag is
@@ -138,13 +142,64 @@ export function resolveOwner(): boolean {
   }
 }
 
+/** "Stripe Inc." -> "stripe-inc". Capped so a mangled link can't turn into a
+ *  40k-character person property. */
+function slugRef(s: string): string | null {
+  const out = s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+  return out || null;
+}
+
+/**
+ * Application attribution. Any link sent out as `?ref=<company>` — on a CV, in
+ * an application form, in a DM — is remembered for that browser, so a visit
+ * reads "stripe" instead of "someone from Rabat". This is the difference
+ * between analytics and a hiring tool.
+ *
+ * Same shape as resolveOwner, for the same reason: persisted BEFORE PostHog is
+ * touched and mirrored into a cookie, so a blocked posthog-js or a cleared
+ * localStorage can't lose the one fact that makes a visit actionable. Unlike
+ * the owner tag this can never be re-derived — if it's dropped, the visit is
+ * anonymous forever.
+ *
+ * FIRST touch wins: someone who arrives through the Stripe link and comes back
+ * later via Google still belongs to the Stripe application.
+ *
+ * @returns the ref this browser is attributed to, if any.
+ */
+export function resolveRef(): string | null {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get('ref');
+
+    // Strip it immediately. Whoever clicked the link should not be reading
+    // their own company name back out of their address bar.
+    if (raw !== null) {
+      params.delete('ref');
+      const q = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (q ? '?' + q : ''));
+    }
+
+    const stored = localStorage.getItem(REF_KEY) || readCookie(REF_KEY);
+    const ref = stored || (raw ? slugRef(raw) : null);
+
+    if (ref) {
+      try { localStorage.setItem(REF_KEY, ref); } catch { /* storage blocked/full */ }
+      writeCookie(REF_KEY, ref, REF_MAX_AGE);
+    }
+    return ref;
+  } catch {
+    return null;
+  }
+}
+
 export function initAnalytics(): void {
   if (started || typeof window === 'undefined') return;
   started = true;
 
-  // Resolved FIRST, and outside the try below: persisting the owner tag must
-  // never depend on PostHog loading successfully.
+  // Resolved FIRST, and outside the try below: persisting the owner tag and the
+  // attribution must never depend on PostHog loading successfully.
   const isOwner = resolveOwner();
+  const ref = resolveRef();
 
   const inIframe = !!window.parent && window.parent !== window;
 
@@ -187,6 +242,11 @@ export function initAnalytics(): void {
       posthog.register({ is_owner: true }); // stamped on every event from here on
       posthog.identify('owner');            // one person across all owner devices
     }
+
+    // Registered (not captured once) so EVERY event carries it — that's what
+    // lets the roster group a whole person by the application they came from.
+    // After the owner block, since reset() above would otherwise clear it.
+    if (ref) posthog.register({ ref });
 
     // JS errors — the site should never fail silently in production. Capped at
     // 5 per page so a render-loop error can't flood the event stream.

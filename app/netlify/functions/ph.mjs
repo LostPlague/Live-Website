@@ -116,7 +116,10 @@ const ROSTER_SQL = `
     any(properties.$geoip_country_name) country, any(properties.$geoip_city_name) city,
     any(properties.$device_type) device, any(properties.$browser) browser,
     any(properties.$geoip_latitude) lat, any(properties.$geoip_longitude) lon,
-    (countIf(properties.is_owner = true) > 0 OR countIf(distinct_id = 'owner') > 0) owner
+    (countIf(properties.is_owner = true) > 0 OR countIf(distinct_id = 'owner') > 0) owner,
+    -- Appended last on purpose: shapeRoster reads this row positionally, so a
+    -- new column goes on the end rather than shifting every index behind it.
+    any(properties.ref) ref
   FROM events WHERE ${BASE}
   GROUP BY person_id
   HAVING ${HUMAN} OR ${OWNER}
@@ -134,6 +137,7 @@ function shapeRoster(rows) {
       dwell: num(r[11]), apps: num(r[12]),
       country: r[13], city: r[14], device: r[15], browser: r[16],
       lat: r[17] == null ? null : Number(r[17]), lon: r[18] == null ? null : Number(r[18]),
+      ref: r[20] || null, // r[19] is the owner flag, handled just below
     };
     if (Number(r[19]) > 0) {
       // merge any stray owner person-rows into one profile
@@ -223,7 +227,8 @@ export const handler = async (event) => {
               any(properties.$screen_width), any(properties.$screen_height),
               any(properties.$referring_domain), any(properties.$geoip_time_zone),
               min(timestamp), max(timestamp), count(),
-              uniqIf(properties.$session_id, properties.$session_id != '')
+              uniqIf(properties.$session_id, properties.$session_id != ''),
+              any(properties.ref)
             FROM events ${P}`),
         hog(`SELECT timestamp, event, properties.app, properties.stage, properties.attemptsLeft,
               properties.seconds, properties.$current_url, properties.$session_id,

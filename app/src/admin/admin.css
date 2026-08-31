@@ -286,6 +286,25 @@
 .cc-row-dim td { color: var(--faint); }
 .cc-vid { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--sky) !important; white-space: nowrap; }
 .cc-ret { display: inline-flex; align-items: center; gap: 2px; margin-left: 7px; font-size: 10px; color: var(--good); background: rgba(52,211,153,0.12); border-radius: 999px; padding: 1px 6px; }
+
+/* Application attribution. Mono like the visitor id — both are identity, not
+   prose. Deliberately not a new accent colour: the palette keeps one. */
+.cc-ref {
+  display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  font-weight: 600; color: var(--ink); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; white-space: nowrap;
+}
+.cc-ref-none { color: var(--faint); }
+
+/* Application link builder */
+.cc-linkgen { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cc-linkgen .cc-input { width: 190px; }
+.cc-linkgen-out {
+  flex: 1 1 260px; min-width: 0; font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
+  color: var(--muted); background: rgba(0,0,0,0.28); border: 1px solid var(--line);
+  border-radius: 9px; padding: 8px 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cc-linkgen-out b { color: var(--sky); font-weight: 700; }
 .cc-table-scroll { max-height: 480px; overflow-y: auto; border-radius: 8px; }
 .cc-flags { display: inline-flex; gap: 5px; }
 .cc-flag { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; border: 1px solid var(--line); color: var(--muted); }

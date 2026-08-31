@@ -157,6 +157,42 @@ export const OverviewPage: React.FC<{ d: OverviewData; onOpenVisitor: (v: Visito
   );
 };
 
+// ── application link builder ─────────────────────────────────────────────────
+// Attribution is only worth having if the tagged links are trivial to produce.
+// Nobody hand-writes query strings thirty times while applying for jobs, and a
+// link that's mistyped once is a visit that can never be attributed afterwards.
+const LinkBuilder: React.FC = () => {
+  const [name, setName] = useState('');
+  const [copied, setCopied] = useState(false);
+  // Must match slugRef() in analytics.ts, so what you copy is what gets stored.
+  const slug = name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+  const url = `https://mohamedtabari.com/?ref=${slug}`;
+
+  const copy = async () => {
+    if (!slug) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch { /* clipboard blocked — the URL is on screen to copy by hand */ }
+  };
+
+  return (
+    <Card span={12} title="Application link"
+      right={<span className="cc-count">tag a link so you know which application opened it</span>}>
+      <div className="cc-linkgen">
+        <input className="cc-input" placeholder="Company name" value={name} aria-label="Company name"
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') void copy(); }} />
+        <span className="cc-linkgen-out">https://mohamedtabari.com/?ref=<b>{slug || 'company'}</b></span>
+        <button className="cc-btn-ghost" onClick={copy} disabled={!slug}>
+          <Icon name="link" size={13} />{copied ? 'Copied' : 'Copy link'}
+        </button>
+      </div>
+    </Card>
+  );
+};
+
 // ── VISITORS ─────────────────────────────────────────────────────────────────
 export const VisitorsPage: React.FC<{
   d: VisitorsData; onOpen: (v: Visitor) => void;
@@ -176,7 +212,8 @@ export const VisitorsPage: React.FC<{
         (v.city || '').toLowerCase().includes(s) ||
         (v.country || '').toLowerCase().includes(s) ||
         (v.device || '').toLowerCase().includes(s) ||
-        (v.browser || '').toLowerCase().includes(s));
+        (v.browser || '').toLowerCase().includes(s) ||
+        (v.ref || '').toLowerCase().includes(s));
     }
     out.sort((a, b) =>
       sort === 'score' ? b.score - a.score :
@@ -186,9 +223,9 @@ export const VisitorsPage: React.FC<{
   }, [d.visitors, q, klass, sort]);
 
   const exportCsv = () => {
-    const head = 'number,score,class,city,country,device,browser,sessions,first_seen,last_seen,events,seconds_in_apps,resume,matrix,contact';
+    const head = 'number,ref,score,class,city,country,device,browser,sessions,first_seen,last_seen,events,seconds_in_apps,resume,matrix,contact';
     const lines = d.visitors.map((v) => [
-      v.num, v.score, v.class, v.city || '', v.country || '', v.device || '', v.browser || '',
+      v.num, v.ref || '', v.score, v.class, v.city || '', v.country || '', v.device || '', v.browser || '',
       v.sessions, v.first, v.last, v.events, Math.round(v.dwell), v.resume ? 1 : 0, v.matrix ? 1 : 0, v.contact ? 1 : 0,
     ].map((x) => `"${String(x).replace(/"/g, '""')}"`).join(','));
     const blob = new Blob([head + '\n' + lines.join('\n')], { type: 'text/csv' });
@@ -203,6 +240,7 @@ export const VisitorsPage: React.FC<{
     <>
       <OwnerStrip owner={d.owner} />
       <div className="cc-grid">
+        <LinkBuilder />
         <Card span={12}
           title={<>Visitor roster <span className="cc-count">{rows.length} of {d.visitors.length} · numbers are permanent</span></>}
           right={
@@ -232,7 +270,7 @@ export const VisitorsPage: React.FC<{
             <div className="cc-table-scroll">
               <table className="cc-table">
                 <thead><tr>
-                  <th>ID</th><th>Score</th><th>Class</th><th>Location</th><th>Device</th>
+                  <th>ID</th><th>Source</th><th>Score</th><th>Class</th><th>Location</th><th>Device</th>
                   <th>First seen</th><th>Last seen</th><th>Visits</th><th>Time in apps</th><th>Flags</th>
                 </tr></thead>
                 <tbody>
@@ -244,6 +282,9 @@ export const VisitorsPage: React.FC<{
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(v); } }}
                     >
                       <td className="cc-vid">{v.num}{v.returning && <span className="cc-ret" title={`${v.sessions} separate visits`}><Icon name="refresh" size={10} />{v.sessions}</span>}</td>
+                      <td>{v.ref
+                        ? <span className="cc-ref" title={`Arrived via the "${v.ref}" link`}>{v.ref}</span>
+                        : <span className="cc-ref-none" title="No ?ref= on the link they used">—</span>}</td>
                       <td><span className="cc-score-cell"><span className="cc-score-bar"><span style={{ width: `${v.score}%` }} /></span>{v.score}</span></td>
                       <td><ClassChip k={v.class} /></td>
                       <td>{[v.city, v.country].filter(Boolean).join(', ') || '—'}</td>
@@ -361,6 +402,8 @@ export const DossierView: React.FC<{ visitor: Visitor; detail: VisitorDetail | n
                 <div><span className="cc-fact-k">Device</span><span className="cc-fact-v">{fact(3)} · {fact(5)}</span></div>
                 <div><span className="cc-fact-k">Browser</span><span className="cc-fact-v">{fact(4)}</span></div>
                 <div><span className="cc-fact-k">Screen</span><span className="cc-fact-v">{p[6] ? `${p[6]}×${p[7]}` : '—'}</span></div>
+                <div><span className="cc-fact-k">Application</span><span className="cc-fact-v">
+                  {p[14] ? <span className="cc-ref">{String(p[14])}</span> : '—'}</span></div>
                 <div><span className="cc-fact-k">Came from</span><span className="cc-fact-v">{fact(8)}</span></div>
                 <div><span className="cc-fact-k">First seen</span><span className="cc-fact-v">{p[10] ? fmtDay(String(p[10])) : '—'}</span></div>
                 <div><span className="cc-fact-k">Last seen</span><span className="cc-fact-v">{p[11] ? fmtDay(String(p[11])) : '—'}</span></div>

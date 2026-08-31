@@ -18,18 +18,19 @@ const mk = (
     events: 12, custom: 6, sessions: 1, resume: false, matrix: false, contact: false,
     stages: 0, started: true, dwell: 120, apps: 2,
     device: 'Desktop', browser: 'Chrome', returning: false, score: 18, class: 'explorer',
+    ref: null,
     ...o,
   } as Visitor;
   return base;
 };
 
 const VISITORS: Visitor[] = [
-  mk(1, 6 * day, 40_000, { city: 'Austin', country: 'United States', lat: 30.27, lon: -97.74, resume: true, matrix: true, contact: false, stages: 3, sessions: 3, returning: true, events: 84, dwell: 1260, apps: 5, score: 92, class: 'hot', device: 'Desktop', browser: 'Chrome' }),
+  mk(1, 6 * day, 40_000, { ref: 'stripe', city: 'Austin', country: 'United States', lat: 30.27, lon: -97.74, resume: true, matrix: true, contact: false, stages: 3, sessions: 3, returning: true, events: 84, dwell: 1260, apps: 5, score: 92, class: 'hot', device: 'Desktop', browser: 'Chrome' }),
   mk(2, 5 * day, 3 * hr, { city: 'Casablanca', country: 'Morocco', lat: 33.57, lon: -7.59, contact: true, sessions: 2, returning: true, events: 41, dwell: 610, apps: 3, score: 58, class: 'hot', device: 'Mobile', browser: 'Safari' }),
-  mk(3, 4 * day, 9 * hr, { city: 'London', country: 'United Kingdom', lat: 51.5, lon: -0.12, resume: true, events: 29, dwell: 340, apps: 3, score: 61, class: 'hot', device: 'Desktop', browser: 'Firefox' }),
+  mk(3, 4 * day, 9 * hr, { ref: 'monzo', city: 'London', country: 'United Kingdom', lat: 51.5, lon: -0.12, resume: true, events: 29, dwell: 340, apps: 3, score: 61, class: 'hot', device: 'Desktop', browser: 'Firefox' }),
   mk(4, 3 * day, 26 * hr, { city: 'Paris', country: 'France', lat: 48.85, lon: 2.35, stages: 2, events: 33, dwell: 410, apps: 4, score: 34, class: 'explorer' }),
   mk(5, 2 * day, 2 * day, { city: 'Berlin', country: 'Germany', lat: 52.52, lon: 13.4, events: 9, dwell: 75, apps: 1, score: 9, class: 'passerby', device: 'Mobile', browser: 'Chrome' }),
-  mk(6, 30 * hr, 5 * hr, { city: 'San Francisco', country: 'United States', lat: 37.77, lon: -122.42, stages: 1, events: 22, dwell: 300, apps: 3, score: 28, class: 'explorer', browser: 'Edge' }),
+  mk(6, 30 * hr, 5 * hr, { ref: 'stripe', city: 'San Francisco', country: 'United States', lat: 37.77, lon: -122.42, stages: 1, events: 22, dwell: 300, apps: 3, score: 28, class: 'explorer', browser: 'Edge' }),
   mk(7, 9 * hr, 20 * min, { city: 'Dubai', country: 'United Arab Emirates', lat: 25.2, lon: 55.27, events: 15, dwell: 180, apps: 2, score: 19, class: 'explorer' }),
   mk(8, 2 * hr, 3 * min, { city: 'Tokyo', country: 'Japan', lat: 35.68, lon: 139.69, events: 7, dwell: 60, apps: 2, score: 12, class: 'passerby', device: 'Mobile', browser: 'Safari' }),
 ];
@@ -95,7 +96,7 @@ export const S_VISITORS: VisitorsData = {
 export const S_DETAIL: VisitorDetail = {
   replayBase: 'https://us.posthog.com/project/503872/replay',
   profile: ['United States', 'Austin', 'Texas', 'Desktop', 'Chrome', 'Windows', 1920, 1080,
-    'linkedin.com', 'America/Chicago', iso(6 * day), iso(40_000), 84, 3],
+    'linkedin.com', 'America/Chicago', iso(6 * day), iso(40_000), 84, 3, 'stripe'],
   timeline: [
     [iso(6 * day), 'experience_started', null, null, null, null, '/', 's1', null, null],
     [iso(6 * day - 20e3), 'app_opened', 'showcase', null, null, null, '/os', 's1', null, null],
