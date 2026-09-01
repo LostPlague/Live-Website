@@ -139,10 +139,17 @@ const AdminDashboard: React.FC = () => {
   // restore session
   useEffect(() => { if (pw) void loadPage('overview', days, { silent: true }); /* eslint-disable-next-line */ }, []);
 
-  // auto-refresh the active page
+  // Auto-refresh the active page — but not while the tab is hidden. This
+  // dashboard gets left open for hours, and every tick is a full round of
+  // PostHog queries nobody is looking at. That matters more than it sounds:
+  // those queries already run close to their execution-time limit, and the
+  // wasted ticks were competing with the ones actually on screen.
   useEffect(() => {
     if (!authed) return;
-    const id = window.setInterval(() => void loadPage(page, days, { silent: true }), 60_000);
+    const id = window.setInterval(() => {
+      if (document.hidden) return;
+      void loadPage(page, days, { silent: true });
+    }, 60_000);
     return () => window.clearInterval(id);
   }, [authed, page, days, loadPage]);
 

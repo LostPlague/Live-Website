@@ -31,8 +31,19 @@ const BASE =
 
 // What makes a person a real human (evaluated per person over all their events):
 // they ENGAGED like a person AND carry no headless-renderer fingerprint.
+// NOTE ON `experience_started` — do not simplify this back to a bare count.
+// On desktop it means a human CLICKED Start in the 3D room: real intent. On
+// mobile it is fired automatically on mount (main.tsx, so the funnel still
+// works without the room), carrying skipped3d:true. Counting the automatic one
+// reduced the strongest signal in this gate to "has a mobile user agent" — and
+// Googlebot crawls mobile-first, so datacenter traffic walked straight in and
+// was handed permanent visitor numbers. Only the earned one counts here; the
+// mobile event still exists and still feeds the funnel elsewhere.
+//
+// Mobile humans keep a route in via the section_viewed clause: real reading
+// time or actual scrolling, neither of which a headless renderer produces.
 const ENGAGED = `(
-     countIf(event = 'experience_started') > 0
+     countIf(event = 'experience_started' AND properties.skipped3d IS NULL) > 0
   OR countIf(event = 'resume_downloaded') > 0
   OR countIf(event LIKE 'secret_%') > 0
   OR countIf(event = 'contact_submitted') > 0
@@ -40,6 +51,9 @@ const ENGAGED = `(
   OR countIf(event = 'radio_play') > 0
   OR countIf(event = 'link_clicked') > 0
   OR uniqIf(properties.app, event = 'app_opened') >= 2
+  OR countIf(event = 'section_viewed' AND (
+          (properties.seconds IS NOT NULL AND toFloat(properties.seconds) >= 15)
+       OR (properties.scrollPct IS NOT NULL AND toFloat(properties.scrollPct) >= 25))) > 0
   OR countIf(event NOT LIKE '$%') >= 6
 )`;
 // Renderer bots (e.g. Google's indexer from Council Bluffs) DO click prominent
