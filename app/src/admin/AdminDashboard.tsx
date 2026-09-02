@@ -153,6 +153,25 @@ const AdminDashboard: React.FC = () => {
     return () => window.clearInterval(id);
   }, [authed, page, days, loadPage]);
 
+  // "Live right now" on its own fast loop. It used to ride the 60s full-page
+  // refresh, which meant a presence feed could be a minute behind before
+  // PostHog's own ingest lag was even counted. On its own it is a single cheap
+  // query, so polling it 3x more often still costs less than one overview round.
+  // Only while Overview is actually on screen and visible.
+  useEffect(() => {
+    if (!authed || page !== 'overview' || dossier) return;
+    const tick = async () => {
+      if (document.hidden) return;
+      try {
+        const d = await api({ mode: 'live' }) as { live: OverviewData['live'] };
+        setStore((s) => (s.overview ? { ...s, overview: { ...s.overview, live: d.live } } : s));
+        setUpdated(new Date());
+      } catch { /* the 60s full refresh will surface any real problem */ }
+    };
+    const id = window.setInterval(tick, 20_000);
+    return () => window.clearInterval(id);
+  }, [authed, page, dossier, api]);
+
   // Escape backs out of the dossier (keyboard parity with the back button)
   useEffect(() => {
     if (!dossier) return;

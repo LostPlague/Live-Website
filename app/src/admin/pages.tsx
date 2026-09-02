@@ -91,7 +91,8 @@ export const OverviewPage: React.FC<{ d: OverviewData; onOpenVisitor: (v: Visito
 
         <Card span={4} title="Live right now" right={<span className={`cc-live-dot ${d.live.length ? 'on' : ''}`} />}>
           {d.live.length === 0 ? (
-            <Empty icon="eye" text="Nobody on the site right now" sub="Updates every minute" />
+            <Empty icon="eye" text="Nobody on the site right now"
+              sub="Checks every 20s · arrivals show up 1–3 min late (PostHog ingest)" />
           ) : (
             <div className="cc-feed">
               {d.live.map((r, i) => {
@@ -242,7 +243,7 @@ export const VisitorsPage: React.FC<{
       <div className="cc-grid">
         <LinkBuilder />
         <Card span={12}
-          title={<>Visitor roster <span className="cc-count">{rows.length} of {d.visitors.length} · numbers are permanent</span></>}
+          title={<>Visitor roster <span className="cc-count" title="Numbers are positions in first-seen order among people who pass the bot filter. They hold day to day, but changing that filter reshuffles them.">{rows.length} of {d.visitors.length} · numbered by arrival order</span></>}
           right={
             <span className="cc-toolbar">
               <span className="cc-search"><Icon name="search" size={13} />

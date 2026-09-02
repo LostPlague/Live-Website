@@ -180,6 +180,7 @@ function shapeRoster(rows) {
 // every 60s and page switches re-fetch — no need to hit PostHog each time.
 const cache = new Map();
 const TTL_MS = 25_000;
+const LIVE_TTL_MS = 8_000; // one cheap 5-minute-window query; staleness is the failure mode
 
 // The roster and the all-time person count are the two heaviest queries here,
 // they both ignore the selected range, and BOTH the Overview and Visitors pages
@@ -190,6 +191,26 @@ const TTL_MS = 25_000;
 // PROMISE rather than the result so two pages in flight collapse onto a single
 // query instead of racing each other.
 const ALL_PERSONS_SQL = `SELECT count(DISTINCT person_id) FROM events WHERE ${BASE}`;
+
+// "Live right now" — deliberately its OWN query and its own mode. It used to be
+// one of eight inside the overview payload, which meant refreshing this single
+// card re-ran the roster and every KPI. That made frequent polling unaffordable,
+// so the card lagged reality by up to ~85s of our own making. Alone it scans a
+// 5-minute window and costs almost nothing, so it can be polled often AND cut
+// total query load at the same time.
+//
+// No engagement gate here: that gate is retrospective and a genuine visitor 20
+// seconds into a first session hasn't earned it yet — requiring it would hide
+// exactly the person this card exists to show. Positive proof of a bot (the
+// headless fingerprint) excludes; absence of proof of humanity does not.
+const LIVE_SQL = `
+  SELECT person_id, any(properties.$geoip_city_name), any(properties.$geoip_country_name),
+    max(timestamp), count()
+  FROM events WHERE ${BASE} AND timestamp > now() - INTERVAL 5 MINUTE
+  GROUP BY person_id
+  HAVING countIf(properties.is_owner = true) = 0 AND countIf(distinct_id = 'owner') = 0
+    AND NOT ${BOTLIKE}
+  ORDER BY max(timestamp) DESC LIMIT 12`;
 const SHARED_TTL_MS = 60_000;
 const sharedCache = new Map();
 
@@ -211,15 +232,18 @@ export const handler = async (event) => {
   try { body = JSON.parse(event.body || '{}'); } catch { return j({ error: 'bad request' }, 400); }
   if (!passwordOk(body.password)) return j({ error: 'unauthorized' }, 401);
 
-  const mode = ['overview', 'visitors', 'visitor', 'challenge', 'content', 'system'].includes(body.mode)
+  const mode = ['overview', 'visitors', 'visitor', 'challenge', 'content', 'system', 'live'].includes(body.mode)
     ? body.mode : 'overview';
   const days = [1, 7, 30, 90].includes(body.days) ? body.days : 7;
   const tz = typeof body.tz === 'string' && /^[A-Za-z][A-Za-z0-9_+/-]{0,50}$/.test(body.tz) ? body.tz : 'UTC';
   const showBots = body.showBots === true;
 
   const cacheKey = JSON.stringify({ mode, days, tz, showBots, pid: body.personId || '' });
+  // The live card is the one view where staleness is the whole point of failing,
+  // and it is cheap enough to re-run often. Everything else keeps the 25s cache.
+  const ttl = mode === 'live' ? LIVE_TTL_MS : TTL_MS;
   const hit = cache.get(cacheKey);
-  if (hit && Date.now() - hit.t < TTL_MS) return j(hit.data);
+  if (hit && Date.now() - hit.t < ttl) return j(hit.data);
 
   // Range scoping: identity/roster is all-time since epoch (stable numbering);
   // range-windowed stats additionally clip to the selected period.
@@ -297,6 +321,12 @@ export const handler = async (event) => {
       ]);
       const { visitors, owner } = shapeRoster(roster);
       data = { visitors, owner, botCount: Math.max(0, scalar(allPersons) - roster.length), bots };
+    }
+
+    else if (mode === 'live') {
+      // Names come from the roster the client already holds — no need to pay for
+      // it again just to refresh a presence feed.
+      data = { live: await hog(LIVE_SQL) };
     }
 
     else if (mode === 'challenge') {
@@ -468,20 +498,7 @@ export const handler = async (event) => {
         hog(`SELECT timestamp, event, properties.app, properties.$geoip_country_name, person_id,
                properties.stage, properties.section, properties.target
              FROM events ${WV} AND event NOT LIKE '$%' ORDER BY timestamp DESC LIMIT 30`),
-        // LIVE — the one card that must not use the full engagement gate. That
-        // gate is retrospective: a genuine visitor 20 seconds into their first
-        // session hasn't clicked Start or opened a 2nd app yet, and requiring it
-        // would hide exactly the person this card exists to show. What we DO
-        // exclude is the headless-renderer fingerprint, which is positive proof
-        // of a bot at any age — previously this query had no bot filter at all,
-        // so Google's indexer surfaced here as a live human.
-        hog(`SELECT person_id, any(properties.$geoip_city_name), any(properties.$geoip_country_name),
-               max(timestamp), count()
-             FROM events WHERE ${BASE} AND timestamp > now() - INTERVAL 5 MINUTE
-             GROUP BY person_id
-             HAVING countIf(properties.is_owner = true) = 0 AND countIf(distinct_id = 'owner') = 0
-               AND NOT ${BOTLIKE}
-             ORDER BY max(timestamp) DESC LIMIT 12`),
+        hog(LIVE_SQL), // see LIVE_SQL — also served on its own via mode 'live'
         sharedQuery('roster', ROSTER_SQL),
         sharedQuery('allPersons', ALL_PERSONS_SQL),
       ]);
