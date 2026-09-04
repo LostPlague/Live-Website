@@ -15,6 +15,13 @@
 [functions]
   directory = "netlify/functions"
 
+# Resume-download alerts. The 15m interval is load-bearing: alerts.mjs reads the
+# window [now-20m, now-5m], which is exactly 15 minutes wide so consecutive runs
+# tile without overlapping (double emails) or leaving a gap (missed downloads).
+# Change one and you must change the other.
+[functions."alerts"]
+  schedule = "*/15 * * * *"
+
 # SPA fallback: serve index.html for every path so React Router owns routing.
 # Without this, deep links like /os and any page refresh would 404.
 [[redirects]]

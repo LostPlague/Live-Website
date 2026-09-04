@@ -42,11 +42,14 @@ const ShowcaseExplorer: React.FC<ShowcaseExplorerProps> = (props) => {
       initialLeft={56}
       initialWidth={initWidth}
       initialHeight={initHeight}
-      title="Mohamed Tabari - Showcase 2025"
+      // Derived, not hardcoded: this read "2025" until September 2026, on the
+      // page recruiters land on. A date that ages badly should never be a
+      // literal. Same for the year in VerticalNavbar.
+      title={`Mohamed Tabari - Showcase ${new Date().getFullYear()}`}
       iconSrc={windowExplorerIcon}
       onClose={props.onClose}
       onMinimize={props.onMinimize}
-      bottomLeftText={'© Copyright 2025 Mohamed Tabari'}
+      bottomLeftText={`© Copyright ${new Date().getFullYear()} Mohamed Tabari`}
     >
       <div
         className="site-page"

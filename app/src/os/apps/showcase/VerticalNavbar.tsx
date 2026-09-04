@@ -34,7 +34,8 @@ const VerticalNavbar: React.FC<VerticalNavbarProps> = () => {
       <div className="site-navbar-header" style={styles.header}>
         <h1 style={styles.headerText}>Mohamed</h1>
         <h1 style={styles.headerText}>Tabari</h1>
-        <h3 style={styles.headerShowcase}>Showcase '25</h3>
+        {/* Derived so it can't go stale again — it read '25 into September 2026. */}
+        <h3 style={styles.headerShowcase}>Showcase '{String(new Date().getFullYear()).slice(-2)}</h3>
       </div>
       <div className="site-navbar-links" style={styles.links}>
         <Link containerStyle={styles.link} to="" text="HOME" />
