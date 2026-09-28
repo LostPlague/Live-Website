@@ -10,8 +10,8 @@ import { track } from '../../../analytics';
 //    2nd role — same company, two positions).
 //  - ALL body text is bullets (no lead-in paragraph), so per-job bullet spacing
 //    is uniform.
-// Content synced 2026-07-24 from "Mohamed Tabari - Senior QA Resume.docx"
-// (Med's updated Senior QA resume). Languages section deliberately excluded.
+// Content synced 2026-09-28 from "Mohamed Tabari -Software QA.docx"
+// (Med's updated Software QA resume). Languages section deliberately excluded.
 
 interface Role {
   company?: string; // omitted → same company as the role above it
@@ -27,15 +27,15 @@ const experience: Role[] = [
     company: 'Profectra',
     websiteLabel: 'www.profectra.com',
     websiteHref: 'https://www.profectra.com',
-    role: 'Co-Founder | QA Automation & AI Agent Testing',
+    role: 'Co-Founder | Quality Assurance & AI Agent Testing',
     dates: '02/2025 - 06/2026',
     bullets: [
       'Co-founded Profectra, an agentic automation studio building multi-agent systems end to end, including architecture, implementation, QA, and deployment.',
-      'Shipped several production web and AI-agent applications end to end, owning test strategy, automated regression coverage, release validation, and production deployment.',
-      'Developed end-to-end UI regression coverage with Playwright, running cross-browser tests on Chromium, Firefox, and WebKit; containerized with Docker and integrated into GitHub Actions CI/CD.',
-      'Designed a multi-module Python/pytest automation engine with deterministic golden test cases to validate non-deterministic AI outputs and catch silent failure modes that standard functional testing often still misses.',
-      'Implemented automated REST API regression checks in Python and pytest, validating authentication, error handling, and response schemas on every commit through the CI pipeline.',
-      'Developed MCP-based integrations connecting AI agents across external tooling under a read-only permission model, following a full source-level dependency audit.',
+      'Shipped several production web and AI-agent applications, owning test strategy, automated regression coverage, release validation, and deployment.',
+      'Translated product requirements into practical test plans and release criteria, helping prioritize risks and keep delivery aligned with user needs.',
+      'Developed cross-browser regression coverage in TypeScript using Playwright, containerized with Docker and integrated into GitHub Actions CI/CD.',
+      'Built automated quality checks in Python and pytest for AI outputs and REST APIs, detecting silent failures and validating critical behavior on every commit.',
+      'Configured and validated MCP-based integrations connecting AI agents to external tools under a read-only permission model, following source-level dependency audits.',
     ],
   },
   {
@@ -43,11 +43,10 @@ const experience: Role[] = [
     role: 'Senior Software Quality Analyst',
     dates: '02/2020 - 01/2025',
     bullets: [
-      'Led testing of AI-powered object recognition and voice assistant features across 30+ Galaxy models spanning phones, tablets, and wearables within a 100+ physical-device lab.',
-      'Filed and triaged 20+ defects per week (~1,000 annually) against near-daily firmware builds, using ADB and Android Studio logcat analysis to isolate root cause and accelerating issue resolution by 15%.',
-      'Owned regression coverage for foldable form factors, including dual-screen continuity and fold-state transitions, as well as ruggedized enterprise handsets; triggered suites through Jenkins CI pipelines.',
-      'Validated Verizon and AT&T carrier builds, verifying carrier-specific features, network provisioning, and OTA configuration.',
-      'Assessed live-translation and voice-assistant behavior across Arabic, French, and English, assessing translation accuracy, RTL rendering, latency, and reliability across supported Galaxy devices.',
+      'Ran extensive manual functional, regression, performance, network, and OTA update testing on phones, tablets, and wearables for every major firmware release.',
+      'Filed, triaged, and tracked 20+ defects per week in Jira and PLM across near-daily firmware builds, using ADB and Android Studio logcat to identify root causes and working with teams to prioritize fixes, report release status, and accelerate resolution by 15%.',
+      'Updated and maintained existing Appium test suites, adding coverage for new features and running them through Jenkins CI.',
+      'Led testing of AI object recognition, live translation, and voice assistants across 30+ Galaxy models, evaluating Arabic, French, and English accuracy, RTL rendering, latency, and reliability.',
       'Mentored and managed five QA engineers and directed cross-departmental release integration across three value streams, increasing productivity by 20%.',
     ],
   },
@@ -57,7 +56,7 @@ const experience: Role[] = [
     dates: '05/2019 - 02/2020',
     bullets: [
       'Developed and implemented test plans for manual and automated testing of network protocols, ensuring adherence to product quality standards and industry benchmarks.',
-      'Executed comprehensive performance testing with JMeter, analyzing scalability and improving response times by 25% during peak network loads.',
+      'Ran performance testing on devices, measuring app launch time, memory use, and network throughput with ADB, Android Studio Profiler, and QCAT, improving response times by 25%.',
       'Automated regression testing with Selenium and Appium, integrated into Jenkins CI pipelines, boosting efficiency and increasing overall test coverage.',
       'Partnered with cross-functional teams to troubleshoot software issues using ADB and Android Studio logcat analysis, and validate hardware components, optimizing testing workflows and reducing downtime.',
     ],
@@ -67,8 +66,8 @@ const experience: Role[] = [
     role: 'Quality Analyst',
     dates: '11/2018 - 04/2019',
     bullets: [
-      'Created and updated technical documentation, test workflows, and processes, streamlining QA operations and improving team efficiency by 20%.',
-      'Directed smoke, functional, and regression testing across QA, SIT, UAT, and PROD environments, ensuring compliance with healthcare IT standards.',
+      'Created and updated technical documentation, test workflows, and processes, streamlining QA operations and improving team efficiency.',
+      'Performed smoke, functional, and regression testing across QA, SIT, UAT, and PROD environments, ensuring compliance with healthcare IT standards.',
       'Partnered with R&D and clinical teams to implement IT standards and regulatory requirements, ensuring adherence to medical technology guidelines.',
     ],
   },
@@ -77,7 +76,7 @@ const experience: Role[] = [
     role: 'Quality Analyst',
     dates: '06/2018 - 11/2018',
     bullets: [
-      'Designed and executed test cases for functional, ad-hoc, and exploratory testing, increasing test coverage and ensuring user-friendly marketing platforms.',
+      'Designed and executed functional, exploratory, and regression test cases for web marketing platforms, automating repeat checks with Selenium to increase coverage.',
       'Validated email marketing functionality across Android and iOS devices using ADB and Xcode simulators, ensuring compatibility and improving user engagement.',
       'Executed RESTful API testing using SoapUI and Postman, identifying and resolving critical integration issues to enhance system reliability.',
     ],
